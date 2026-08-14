@@ -228,8 +228,13 @@ export async function paymentGate(
     await tick(env, `quote402:${entityForAudit.split(":")[0]}`);
     return { ok: false, response: respond402(quote) };
   }
-  if (!(payload as unknown as { extensions?: unknown }).extensions)
-    console.warn("PAYMENT_NO_EXTENSIONS_ECHO", { note: "buyer client did not echo extensions; Bazaar cataloging may not trigger from this payment" });
+  // NOTE (Bazaar investigation, board #790): the spec says clients echo
+  // extensions in PaymentPayload, but NO standard client does (@x402/fetch
+  // ships zero echo code), the official server SDK never injects them, and a
+  // controlled test showed the facilitator ignores the echo either way — so
+  // an absent echo is NORMAL buyer behavior, not an anomaly, and cataloging
+  // rides on the 402 metadata + settled payments alone. Deliberately not
+  // warned, not injected.
 
   // Local sanity BEFORE facilitator round trips: wrong version/rail/recipient/
   // amount is rejected here — an underpaid authorization never reaches settle.
