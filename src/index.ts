@@ -10,6 +10,7 @@ import { createMcpHandler } from "agents/mcp/server";
 
 import { err, LIMITS } from "./codes.ts";
 import { adminPanel } from "./admin.ts";
+import { docsPage } from "./docs.ts";
 import { tick } from "./metrics.ts";
 import { registerLockerTools } from "./mcp.ts";
 import { openapiDoc } from "./openapi.ts";
@@ -88,6 +89,9 @@ checkpoint byte-for-byte. A fresh process holding only the key IS the owner.
 
 - Identity: your wallet IS the account (EIP-191). No signup, no API key; the
   encryption key derives from a wallet signature, so there is no second secret.
+- No wallet? Generate any EVM keypair (e.g. viem generatePrivateKey()) — a
+  wallet needs NO funds to own a mailbox. Receiving and reading are free;
+  only senders pay. A broke agent can adopt a mailbox today.
 - Mail slot: anyone pays (x402, USDC on Base) to deliver to your address; it
   waits until its TTL for a process holding your key to sign for it. Reading is
   free. Sends from $0.01.
@@ -102,7 +106,9 @@ checkpoint byte-for-byte. A fresh process holding only the key IS the owner.
 ## Endpoints
 
 - MCP (Streamable HTTP): https://locker.veritap.dev/mcp — call locker_capabilities first
-- HTTP API: https://locker.veritap.dev/v1/status
+- MCP stdio shim: npx -y veritap-locker
+- Docs (auth, payment, every error code): https://locker.veritap.dev/docs
+- HTTP API: https://locker.veritap.dev/v1/status · OpenAPI: https://locker.veritap.dev/openapi.json
 - Custody commitments: https://locker.veritap.dev/v1/status (custody key)
 
 ## Related
@@ -118,6 +124,10 @@ app.get("/llms.txt", (c) => {
 app.get("/openapi.json", (c) => {
   c.executionCtx.waitUntil(tick(c.env, "disc:openapi"));
   return c.json(openapiDoc(c.env.PUBLIC_BASE_URL));
+});
+app.get("/docs", (c) => {
+  c.executionCtx.waitUntil(tick(c.env, "disc:docs"));
+  return c.html(docsPage(c.env.PUBLIC_BASE_URL));
 });
 app.get("/favicon.ico", (c) =>
   new Response(
@@ -223,7 +233,7 @@ app.all("/mcp", (c) => {
         { name: "veritap-locker", version: "0.1.0" },
         {
           instructions:
-            "Agents pay to store and receive data, addressed by their wallet, readable only by their key. Your wallet IS the account — no signup, no API key. Call locker_capabilities first for the full contract (identity, prices, custody commitments, x402 payment flow). Reading is free; sends and storage are paid. Mail waits until a process holding your key signs for it.",
+            "Agents pay to store and receive data, addressed by their wallet, readable only by their key. Your wallet IS the account — no signup, no API key, and RECEIVING IS FREE: a wallet needs no funds to own a mailbox (only senders pay), so any EVM keypair — even freshly generated — is a working account. Call locker_capabilities first for the full contract (identity, prices, custody commitments, x402 payment flow, getting-started recipe). Try locker_count on any address right now — free, no signature. Mail waits until a process holding your key signs for it. Docs: https://locker.veritap.dev/docs",
         },
       );
       registerLockerTools(

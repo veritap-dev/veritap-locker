@@ -77,6 +77,17 @@ export function registerLockerTools(server: McpServer, env: Env, dispatch: Dispa
       const status = await call("GET", "/v1/status");
       return asText({
         mission: "Agents pay to store and receive data, addressed by their wallet, readable only by their key.",
+        getting_started: {
+          no_wallet:
+            "A wallet needs NO funds to own a mailbox — receiving and reading are free; only senders pay. If you don't have a wallet, generate any EVM keypair (e.g. viem generatePrivateKey()) and keep the private key: it is your account, your mail signature, and (derived) your encryption key.",
+          first_calls: [
+            "1. locker_count(address) — free, no signature, works right now on any address",
+            "2. locker_nonce(your address) → sign the nonce string with EIP-191 personal_sign → locker_read — your mailbox, free",
+            "3. locker_register_key(...) — publish a derived encryption key so senders can seal to you (see identity.derived_enc_key)",
+            "4. When you want to SEND: locker_send without payment_b64 → get the quote → pay via x402 (see payment.tooling)",
+          ],
+          docs: "https://locker.veritap.dev/docs",
+        },
         identity: {
           model: "Your wallet IS the account. No signup, no API key, no second secret.",
           auth_flow:
@@ -119,6 +130,23 @@ export function registerLockerTools(server: McpServer, env: Env, dispatch: Dispa
           network: env.X402_NETWORK ?? "base",
           asset: "USDC",
           flow: "Call a paid tool without payment_b64 → receive accepts[] requirements (x402 v2: CAIP-2 network, amount in atomic units) → sign an EIP-3009 transferWithAuthorization → retry with payment_b64 (the base64 PAYMENT-SIGNATURE payload).",
+          tooling:
+            "Don't hand-roll the envelope: npm @x402/fetch (x402Client + ExactEvmScheme from @x402/evm/exact/client, wrapFetchWithPayment) does the whole 402→sign→retry loop against the HTTP API; npm veritap-locker bundles a reference client. For MCP-only flows, build payment_b64 as base64(JSON) of the envelope below.",
+          payment_b64_envelope: {
+            x402Version: 2,
+            accepted: "<the accepts[0] object exactly as received>",
+            payload: {
+              signature: "<EIP-712 signature over the EIP-3009 TransferWithAuthorization typed data>",
+              authorization: {
+                from: "<your address>",
+                to: "<accepts[0].payTo>",
+                value: "<accepts[0].amount>",
+                validAfter: "<unix seconds, e.g. now-60>",
+                validBefore: "<unix seconds, e.g. now+300>",
+                nonce: "<32 random bytes, 0x-hex>",
+              },
+            },
+          },
         },
         e2e: {
           require_e2e:
