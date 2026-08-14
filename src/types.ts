@@ -6,6 +6,11 @@ export interface Env {
   NONCE_HMAC_KEY?: string;
   /** Phase B: x402 receiving address (address only — key never touches the server). */
   RECEIVING_ADDRESS?: string;
+  X402_ENABLED?: string;
+  X402_NETWORK?: string;
+  FACILITATOR_URL?: string;
+  CDP_API_KEY_ID?: string;
+  CDP_API_KEY_SECRET?: string;
 }
 
 export interface MessageRow {

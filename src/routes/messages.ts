@@ -7,6 +7,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import { canonicalAddress, issueNonce, rateLimited, verifySigned } from "../auth.ts";
+import { paymentGate } from "../payment.ts";
 import { signedGetUrl, signedPutUrl } from "../blob.ts";
 import { err, LIMITS, priceForMessage } from "../codes.ts";
 import { e2eGate } from "../entropy.ts";
@@ -143,6 +144,18 @@ messages.post("/:address/messages", async (c) => {
       201,
     );
   }
+
+  // §6 x402 gate — after free rejections and idempotency replay, before any
+  // row exists. Settle-before-create: see payment.ts ordering rationale.
+  const gate = await paymentGate(
+    c.env,
+    c.req.raw,
+    priceMicro,
+    `${c.env.PUBLIC_BASE_URL}/v1/mb/${address}/messages`,
+    `Deliver a ${size}-byte message (${ttlDays}d retention) to the wallet-addressed mailbox ${address}.`,
+    `send:${address}`,
+  );
+  if (!gate.ok) return gate.response!;
 
   const id = newMessageId();
   const created = nowS();

@@ -7,6 +7,7 @@
 import { Hono } from "hono";
 
 import { canonicalAddress, verifySigned } from "../auth.ts";
+import { paymentGate, paymentsEnabled } from "../payment.ts";
 import { signedGetUrl, signedPutUrl } from "../blob.ts";
 import { err, LIMITS, PRICE } from "../codes.ts";
 import type { Env } from "../types.ts";
@@ -175,6 +176,15 @@ lockers.post("/:address/credit", async (c) => {
   const amount = body?.amount_microusd ?? 0;
   if (amount < PRICE.credit_min_topup_microusd)
     return err("VALIDATION_ERROR", `Minimum top-up is ${PRICE.credit_min_topup_microusd} microusd ($1).`, 400);
+  const gate = await paymentGate(
+    c.env,
+    c.req.raw,
+    amount,
+    `${c.env.PUBLIC_BASE_URL}/v1/mb/${address}/credit`,
+    `Storage credit top-up for ${address}: checkpoints survive you at $0.50/GB-month.`,
+    `credit:${address}`,
+  );
+  if (!gate.ok) return gate.response!;
   const cur = await c.env.DB.prepare(`SELECT balance_microusd FROM credits WHERE address=?`)
     .bind(address)
     .first<{ balance_microusd: number }>();
@@ -187,11 +197,11 @@ lockers.post("/:address/credit", async (c) => {
     .bind(address, amount, nowS())
     .run();
   await c.env.DB.prepare(
-    `INSERT INTO credit_events (address, kind, amount_microusd, at, note) VALUES (?, 'topup', ?, ?, 'phase A manual grant')`,
+    `INSERT INTO credit_events (address, kind, amount_microusd, at, note) VALUES (?, 'topup', ?, ?, 'topup')`,
   )
     .bind(address, amount, nowS())
     .run();
-  return c.json({ credited_microusd: amount });
+  return c.json({ credited_microusd: amount, paid: paymentsEnabled(c.env) });
 });
 
 // ---- status: GET /v1/mb/:address/status (free; balances + projections) ----

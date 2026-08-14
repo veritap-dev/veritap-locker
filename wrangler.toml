@@ -26,4 +26,12 @@ crons = ["*/15 * * * *", "10 5 * * *"]   # sweep · daily credit burn
 [vars]
 LOCKER_ENABLED = "true"
 PUBLIC_BASE_URL = "https://locker.veritap.dev"
-# RECEIVING_ADDRESS set in Phase B. Secrets: NONCE_HMAC_KEY (set via wrangler secret put).
+# Phase B: x402 live on Base Sepolia (hosted keyless facilitator). Mainnet
+# flip = X402_NETWORK "base" + CDP-authed facilitator URL — config, not code.
+# The address is checksummed and is the ONLY payment credential deployed;
+# the wallet key lives in the operator's Base app, never here.
+X402_ENABLED = "true"
+X402_NETWORK = "base-sepolia"
+FACILITATOR_URL = "https://x402.org/facilitator"
+RECEIVING_ADDRESS = "0x5c7872C6aA7Da867F52733Cebf469f4b9A113f2B"
+# Secrets: NONCE_HMAC_KEY, CDP_API_KEY_ID, CDP_API_KEY_SECRET (wrangler secret put).
