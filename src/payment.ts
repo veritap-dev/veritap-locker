@@ -21,6 +21,42 @@
 import type { Env } from "./types.ts";
 import { transition } from "./types.ts";
 
+const b64url = (bytes: Uint8Array | string) => {
+  const u = typeof bytes === "string" ? new TextEncoder().encode(bytes) : bytes;
+  return btoa(String.fromCharCode(...u)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+};
+
+/**
+ * CDP platform JWT (EdDSA), matching cdp-sdk's claim shape exactly:
+ * header {alg, kid, typ, nonce} · payload {sub, iss:"cdp", uris, iat, nbf,
+ * exp: nbf+120}. The 88-char base64 secret is a 64-byte Ed25519 expanded key
+ * (seed ‖ pubkey); WebCrypto imports the 32-byte seed via a PKCS8 wrapper —
+ * the same trick the attestation signer uses.
+ */
+export async function cdpJwt(
+  keyId: string,
+  keySecret: string,
+  method: string,
+  host: string,
+  reqPath: string,
+): Promise<string> {
+  const raw = Uint8Array.from(atob(keySecret.trim()), (c) => c.charCodeAt(0));
+  const seed = raw.slice(0, 32);
+  const prefix = Uint8Array.from([0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20]);
+  const pkcs8 = new Uint8Array(prefix.length + seed.length);
+  pkcs8.set(prefix);
+  pkcs8.set(seed, prefix.length);
+  const key = await crypto.subtle.importKey("pkcs8", pkcs8 as BufferSource, { name: "Ed25519" }, false, ["sign"]);
+
+  const nonce = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: "EdDSA", kid: keyId, typ: "JWT", nonce };
+  const payload = { sub: keyId, iss: "cdp", uris: [`${method} ${host}${reqPath}`], iat: now, nbf: now, exp: now + 120 };
+  const signingInput = `${b64url(JSON.stringify(header))}.${b64url(JSON.stringify(payload))}`;
+  const sig = await crypto.subtle.sign("Ed25519", key, new TextEncoder().encode(signingInput));
+  return `${signingInput}.${b64url(new Uint8Array(sig))}`;
+}
+
 export interface PaymentRequirements {
   scheme: "exact";
   network: string;
@@ -151,10 +187,12 @@ export async function paymentGate(
   const call = async (path: "verify" | "settle") => {
     let auth: Record<string, string> = {};
     if (mainnet && env.CDP_API_KEY_ID && env.CDP_API_KEY_SECRET) {
-      const { createCdpAuthHeaders } = await import("@coinbase/x402");
-      const headersFn = createCdpAuthHeaders(env.CDP_API_KEY_ID, env.CDP_API_KEY_SECRET);
-      const headers = headersFn ? await headersFn() : {};
-      auth = (path === "verify" ? headers.verify : headers.settle) ?? {};
+      // Own WebCrypto JWT: cdp-sdk's node-crypto path emits signatures CDP
+      // rejects under workerd's nodejs_compat (local node: 200, worker: 401 —
+      // isolated with the same key pair). workerd's native Ed25519 works.
+      const jwt = await cdpJwt(env.CDP_API_KEY_ID, env.CDP_API_KEY_SECRET, "POST",
+        "api.cdp.coinbase.com", `/platform/v2/x402/${path}`);
+      auth = { Authorization: `Bearer ${jwt}` };
     }
     const res = await fetch(`${facilitator}/${path}`, {
       method: "POST",
@@ -177,6 +215,8 @@ export async function paymentGate(
 
   try {
     const verify = await call("verify");
+    if (verify.status !== 200 || verify.body.isValid === false)
+      console.warn("VERIFY_REJECTED", { status: verify.status, body: JSON.stringify(verify.body).slice(0, 400) });
     if (!(verify.status === 200 && verify.body.isValid !== false && verify.body.errorReason === undefined))
       return {
         ok: false,

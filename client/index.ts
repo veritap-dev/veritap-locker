@@ -53,11 +53,12 @@ export function sealedBoxOpen(sealed: Uint8Array, pk: Uint8Array, sk: Uint8Array
 }
 
 export class LockerClient {
+  readonly baseUrl: string;
   readonly account: PrivateKeyAccount;
-  constructor(
-    readonly baseUrl: string,
-    privateKey: `0x${string}`,
-  ) {
+  // No TS parameter properties: keeps the file runnable under Node's native
+  // type-stripping (strip-only mode rejects them).
+  constructor(baseUrl: string, privateKey: `0x${string}`) {
+    this.baseUrl = baseUrl;
     this.account = privateKeyToAccount(privateKey);
   }
 
