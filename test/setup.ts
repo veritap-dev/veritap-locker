@@ -10,6 +10,11 @@ const STATE = ".wrangler/test-state";
 let proc: ChildProcess;
 
 export async function setup() {
+  // An externally-supplied LOCKER_BASE (e.g. the deployed URL for the §12
+  // exit-criteria run) wins: no local dev server, no override. Without this
+  // guard the "production" respawn drill silently ran against localhost —
+  // 122ms of round trips was the tell.
+  if (process.env.LOCKER_BASE) return;
   try { execSync(`lsof -ti:${PORT} | xargs kill -9`, { stdio: "ignore" }); } catch {}
   rmSync(STATE, { recursive: true, force: true });
   execSync(`npx wrangler d1 migrations apply veritap_locker --local --persist-to ${STATE}`, { stdio: "ignore" });
