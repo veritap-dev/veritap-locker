@@ -221,6 +221,8 @@ export async function paymentGate(
     request.headers.get("PAYMENT-SIGNATURE") ?? request.headers.get("X-PAYMENT") ?? undefined,
   );
   if (!payload) return { ok: false, response: respond402(quote) };
+  if (!(payload as unknown as { extensions?: unknown }).extensions)
+    console.warn("PAYMENT_NO_EXTENSIONS_ECHO", { note: "buyer client did not echo extensions; Bazaar cataloging may not trigger from this payment" });
 
   // Local sanity BEFORE facilitator round trips: wrong version/rail/recipient/
   // amount is rejected here — an underpaid authorization never reaches settle.
@@ -260,6 +262,16 @@ export async function paymentGate(
       body: JSON.stringify({ x402Version: 2, paymentPayload: payload, paymentRequirements: req }),
       signal: AbortSignal.timeout(20_000),
     });
+    // Bazaar cataloging status rides in this header on verify/settle
+    // (success | processing | rejected). Log it so indexing is observable.
+    const extResp = res.headers.get("EXTENSION-RESPONSES");
+    if (extResp) {
+      try {
+        console.log("EXTENSION_RESPONSES", { path, ...JSON.parse(atob(extResp)) });
+      } catch {
+        console.log("EXTENSION_RESPONSES_RAW", { path, extResp: extResp.slice(0, 200) });
+      }
+    }
     return {
       status: res.status,
       body: (await res.json().catch(() => ({}))) as {
