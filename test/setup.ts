@@ -26,7 +26,7 @@ export async function setup() {
   execSync(`npx wrangler d1 migrations apply veritap_locker --local --persist-to ${PAY_STATE}`, { stdio: "ignore" });
   proc = spawn(
     "npx",
-    ["wrangler", "dev", "--port", String(PORT), "--persist-to", STATE, "--test-scheduled",
+    ["wrangler", "dev", "--port", String(PORT), "--inspector-port", "9331", "--persist-to", STATE, "--test-scheduled",
      "--var", "NONCE_HMAC_KEY:test-hmac-key-0123456789abcdef", "--var", `PUBLIC_BASE_URL:http://localhost:${PORT}`,
      "--var", "X402_ENABLED:false"],
     { stdio: ["ignore", openSync("/tmp/locker-dev-free.log", "w"), openSync("/tmp/locker-dev-free.log", "w")], detached: false },
@@ -37,7 +37,7 @@ export async function setup() {
   // tests 402 issuance and local sanity without touching a chain.
   payProc = spawn(
     "npx",
-    ["wrangler", "dev", "--port", String(PAY_PORT), "--persist-to", PAY_STATE,
+    ["wrangler", "dev", "--port", String(PAY_PORT), "--inspector-port", "9332", "--persist-to", PAY_STATE,
      "--var", "NONCE_HMAC_KEY:test-hmac-key-0123456789abcdef", "--var", `PUBLIC_BASE_URL:http://localhost:${PAY_PORT}`,
      "--var", "X402_ENABLED:true", "--var", "X402_NETWORK:base-sepolia",
      "--var", "RECEIVING_ADDRESS:0x5c7872C6aA7Da867F52733Cebf469f4b9A113f2B",

@@ -7,7 +7,7 @@
 import { Hono } from "hono";
 
 import { canonicalAddress, verifySigned } from "../auth.ts";
-import { paymentGate, paymentResponseHeader, paymentsEnabled } from "../payment.ts";
+import { buildRequirements, paymentGate, paymentResponseHeader, paymentsEnabled, respond402 } from "../payment.ts";
 import { signedGetUrl, signedPutUrl } from "../blob.ts";
 import { err, LIMITS, PRICE } from "../codes.ts";
 import type { Env } from "../types.ts";
@@ -176,6 +176,20 @@ lockers.post("/:address/credit", async (c) => {
   const amount = body?.amount_microusd ?? 0;
   // L2: must be a positive integer (microusd == atomic USDC units). A fractional
   // value would otherwise reach BigInt() in the gate and throw a raw 500.
+  // Discovery probes POST bare bodies expecting 402 + requirements: answer at
+  // the minimum top-up when no payment is attached (settlement never runs on
+  // an invalid body — the checks below re-run for real requests).
+  const invalidAmount =
+    !Number.isInteger(amount) || amount <= 0 || amount < PRICE.credit_min_topup_microusd;
+  if (invalidAmount && paymentsEnabled(c.env) && !c.req.header("PAYMENT-SIGNATURE") && !c.req.header("X-PAYMENT")) {
+    const quote = buildRequirements(
+      c.env,
+      PRICE.credit_min_topup_microusd,
+      `${c.env.PUBLIC_BASE_URL}/v1/mb/${address}/credit`,
+      `Storage credit top-up for ${address}: checkpoints survive you at $0.50/GB-month. Minimum $1; this quote is the minimum — set amount_microusd to the amount you pay.`,
+    );
+    return respond402(quote, "Payment required (and amount_microusd was missing or below the $1 minimum).");
+  }
   if (!Number.isInteger(amount) || amount <= 0)
     return err("VALIDATION_ERROR", "amount_microusd must be a positive integer.", 400);
   if (amount < PRICE.credit_min_topup_microusd)
