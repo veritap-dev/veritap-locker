@@ -201,9 +201,17 @@ messages.post("/:address/read", async (c) => {
   if (!auth.ok) return err(auth.code, auth.message, auth.code === "RATE_LIMITED" ? 429 : 401);
 
   const limit = Math.min(body.limit ?? 50, LIMITS.read_page_max);
-  const cursor = body.cursor ? Number(body.cursor) : 0;
-  const conds: string[] = ["address=?1", "acked_at IS NULL", "expires_at>?2", "created_at>?3"];
-  const binds: unknown[] = [address, nowS(), cursor];
+  // Keyset pagination on (created_at, message_id): timestamps are seconds, so
+  // a burst lands many messages in one second — a created_at-only cursor
+  // stalls after the first page (caught by §12.13).
+  const [curTs, curId] = body.cursor ? (body.cursor.split("|") as [string, string?]) : ["0", ""];
+  const conds: string[] = [
+    "address=?1",
+    "acked_at IS NULL",
+    "expires_at>?2",
+    "(created_at>?3 OR (created_at=?3 AND message_id>?4))",
+  ];
+  const binds: unknown[] = [address, nowS(), Number(curTs), curId ?? ""];
   if (body.filter?.producer) { conds.push(`producer=?${binds.length + 1}`); binds.push(body.filter.producer); }
   if (body.filter?.tag) { conds.push(`tag=?${binds.length + 1}`); binds.push(body.filter.tag); }
   if (body.filter?.since) { conds.push(`created_at>=?${binds.length + 1}`); binds.push(Math.floor(Date.parse(body.filter.since) / 1000)); }
@@ -233,7 +241,10 @@ messages.post("/:address/read", async (c) => {
     });
   }
   const last = (results ?? [])[results!.length - 1];
-  return c.json({ messages: out, next_cursor: out.length === limit && last ? String(last.created_at) : null });
+  return c.json({
+    messages: out,
+    next_cursor: out.length === limit && last ? `${last.created_at}|${last.message_id}` : null,
+  });
 });
 
 // ---- ack: POST /v1/mb/:address/ack (signed; ack = delete) ----

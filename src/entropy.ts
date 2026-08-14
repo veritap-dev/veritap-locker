@@ -9,8 +9,25 @@
  *   3. sender declared encrypted: true (checked by caller)
  */
 
+/**
+ * Size-aware threshold: Shannon entropy of n byte-samples caps at log2(n),
+ * so demanding a flat 7.5 bits/byte would reject REAL sealed-box ciphertext
+ * under ~200 bytes (caught by our own test vectors — the spec's "validate
+ * against real sealed-box corpus" open item, resolved). Small bodies are
+ * instead guarded by the printable-fraction check below.
+ */
 const ENTROPY_MIN_BITS = 7.5;
 const MIN_LEN = 48;
+/**
+ * Threshold = achievable entropy for len uniform samples, minus the
+ * Miller-Madow small-sample bias, minus a safety margin — capped at the spec
+ * number. Uniform random 304-byte bodies measure ~7.4 bits/byte, not 8.
+ */
+const entropyThreshold = (len: number) => {
+  const k = Math.min(256, len);
+  const bias = (k - 1) / (2 * len * Math.LN2);
+  return Math.min(ENTROPY_MIN_BITS, Math.min(8, Math.log2(len)) - bias - 0.35);
+};
 
 export function shannonBitsPerByte(bytes: Uint8Array): number {
   if (bytes.length === 0) return 0;
@@ -43,13 +60,19 @@ export function looksLikePlaintext(bytes: Uint8Array): string | null {
     if (magic.every((m, i) => bytes[i] === m)) return `magic_${name}`;
   // Long printable-ASCII run = prose or config, not ciphertext.
   let run = 0;
-  for (let i = 0; i < Math.min(bytes.length, 512); i++) {
+  let printable = 0;
+  const scan = Math.min(bytes.length, 512);
+  for (let i = 0; i < scan; i++) {
     const b = bytes[i]!;
     if (b >= 0x20 && b < 0x7f) {
+      printable++;
       run++;
       if (run >= 64) return "ascii_run";
     } else run = 0;
   }
+  // Small bodies dodge the entropy test (log2(n) ceiling), so mostly-printable
+  // short bodies are called what they are: text.
+  if (scan >= MIN_LEN && printable / scan > 0.9) return "printable_text";
   return null;
 }
 
@@ -65,10 +88,11 @@ export function e2eGate(bytes: Uint8Array): GateResult {
     return { pass: false, reason: `body shorter than sealed-box minimum (${MIN_LEN} bytes)`, entropy };
   const sniff = looksLikePlaintext(bytes);
   if (sniff) return { pass: false, reason: `recognizable plaintext (${sniff})`, entropy };
-  if (entropy < ENTROPY_MIN_BITS)
+  const threshold = entropyThreshold(bytes.length);
+  if (entropy < threshold)
     return {
       pass: false,
-      reason: `entropy ${entropy.toFixed(2)} bits/byte below ${ENTROPY_MIN_BITS} — real ciphertext is indistinguishable from random`,
+      reason: `entropy ${entropy.toFixed(2)} bits/byte below ${threshold.toFixed(2)} — real ciphertext is indistinguishable from random`,
       entropy,
     };
   return { pass: true, entropy };
