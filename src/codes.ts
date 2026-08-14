@@ -60,6 +60,14 @@ export const LIMITS = {
   sig_fail_cooldown_seconds: 900,
 } as const;
 
+/** #767.1: receipt-vault — $0.02 flat, ≤32KB, kept 365d. Distinct product
+ * code so the ledger separates vault demand from generic sends. */
+export const RECEIPT_VAULT = {
+  price_microusd: 20_000,
+  max_bytes: 32 * 1024,
+  ttl_days: 365,
+} as const;
+
 export function priceForMessage(size: number, ttlDays: number): number {
   let base: number;
   if (size <= 100 * 1024) base = PRICE.msg_100kb_microusd;

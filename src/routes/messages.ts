@@ -9,7 +9,8 @@ import { z } from "zod";
 import { canonicalAddress, issueNonce, rateLimited, verifySigned } from "../auth.ts";
 import { paymentGate } from "../payment.ts";
 import { signedGetUrl, signedPutUrl } from "../blob.ts";
-import { err, LIMITS, priceForMessage } from "../codes.ts";
+import { err, LIMITS, priceForMessage, RECEIPT_VAULT } from "../codes.ts";
+import { guardQuote } from "../cost.ts";
 import { e2eGate } from "../entropy.ts";
 import type { Env, MessageRow } from "../types.ts";
 import { nowS, sha256Hex, transition } from "../types.ts";
@@ -41,6 +42,7 @@ const SendSchema = z
     encrypted: z.boolean().optional(),
     ttl_days: z.number().int().min(1).max(LIMITS.ttl_max_days).optional(),
     idempotency_key: z.string().max(128).optional(),
+    product: z.enum(["message", "receipt_vault"]).optional(),
   })
   .strict(); // unknown fields rejected (§3)
 
@@ -116,8 +118,22 @@ messages.post("/:address/messages", async (c) => {
     // R2 bodies) — the honest structural limit; documented.
   }
 
-  const ttlDays = p.ttl_days ?? LIMITS.ttl_default_days;
-  const priceMicro = priceForMessage(size, ttlDays);
+  // #767.1 receipt-vault: flat price, hard size cap, fixed 1-year retention.
+  const product = p.product ?? "message";
+  if (product === "receipt_vault") {
+    if (size > RECEIPT_VAULT.max_bytes)
+      return err("PAYLOAD_TOO_LARGE", `receipt_vault caps at ${RECEIPT_VAULT.max_bytes} bytes.`, 413);
+    if (p.ttl_days !== undefined && p.ttl_days !== RECEIPT_VAULT.ttl_days)
+      return err("VALIDATION_ERROR", `receipt_vault retention is fixed at ${RECEIPT_VAULT.ttl_days} days.`, 400);
+  }
+  const ttlDays = product === "receipt_vault" ? RECEIPT_VAULT.ttl_days : (p.ttl_days ?? LIMITS.ttl_default_days);
+  // #768: no quote leaves without clearing the cost floor.
+  const quote = await guardQuote(
+    c.env,
+    product === "receipt_vault" ? RECEIPT_VAULT.price_microusd : priceForMessage(size, ttlDays),
+    size, ttlDays, product, `send:${address}`,
+  );
+  const priceMicro = quote.priceMicrousd;
   // Phase A: x402 middleware stubbed to pass-through; price recorded as owed.
 
   const bodyHash = bytes ? await sha256Hex(bytes) : await sha256Hex(`upload:${address}:${size}:${p.idempotency_key ?? ""}`);
@@ -165,24 +181,24 @@ messages.post("/:address/messages", async (c) => {
   if (bytes && r2key === null) {
     await c.env.DB.prepare(
       `INSERT INTO messages (message_id, address, producer, tag, content_type, size, inline_body, r2_key,
-         encrypted, created_at, expires_at, idempotency_key, body_hash, paid_microusd)
-       VALUES (?,?,?,?,?,?,?,NULL,?,?,?,?,?,?)`,
+         encrypted, created_at, expires_at, idempotency_key, body_hash, paid_microusd, product)
+       VALUES (?,?,?,?,?,?,?,NULL,?,?,?,?,?,?,?)`,
     )
       .bind(
         id, address, p.producer ?? null, p.tag ?? null, p.content_type, size,
         bytes as unknown as ArrayBuffer, p.encrypted ? 1 : 0, created, expires,
-        p.idempotency_key ?? null, bodyHash, priceMicro,
+        p.idempotency_key ?? null, bodyHash, priceMicro, product,
       )
       .run();
   } else {
     await c.env.DB.prepare(
       `INSERT INTO messages (message_id, address, producer, tag, content_type, size, inline_body, r2_key,
-         encrypted, created_at, expires_at, idempotency_key, body_hash, paid_microusd)
-       VALUES (?,?,?,?,?,?,NULL,?,?,?,?,?,?,?)`,
+         encrypted, created_at, expires_at, idempotency_key, body_hash, paid_microusd, product)
+       VALUES (?,?,?,?,?,?,NULL,?,?,?,?,?,?,?,?)`,
     )
       .bind(
         id, address, p.producer ?? null, p.tag ?? null, p.content_type, size, r2key,
-        p.encrypted ? 1 : 0, created, expires, p.idempotency_key ?? null, bodyHash, priceMicro,
+        p.encrypted ? 1 : 0, created, expires, p.idempotency_key ?? null, bodyHash, priceMicro, product,
       )
       .run();
   }
@@ -297,6 +313,14 @@ messages.get("/:address/count", async (c) => {
   const ip = c.req.header("cf-connecting-ip") ?? "?";
   if (await rateLimited(c.env, `count:${address}:${ip}`, LIMITS.rate_count_hr))
     return err("RATE_LIMITED", "Count limit reached.", 429);
+  // #767.3: opt-in count privacy — a private_count mailbox answers exactly
+  // like a never-used address. Same opt-in shape as require_e2e.
+  const priv = await c.env.DB.prepare(
+    `SELECT private_count FROM keys WHERE address=? AND superseded_at IS NULL ORDER BY registered_at DESC LIMIT 1`,
+  )
+    .bind(address)
+    .first<{ private_count: number }>();
+  if (priv?.private_count) return c.json({ unacked: 0 });
   const row = await c.env.DB.prepare(
     `SELECT count(*) AS n FROM messages WHERE address=? AND acked_at IS NULL AND expires_at>?`,
   )

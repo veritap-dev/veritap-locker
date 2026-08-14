@@ -22,7 +22,7 @@ keys.post("/:address/keys", async (c) => {
   const address = canonicalAddress(c.req.param("address"));
   if (!address) return err("VALIDATION_ERROR", "Invalid address.", 400);
   const body = (await c.req.json().catch(() => null)) as
-    | { nonce?: string; signature?: string; enc_pubkey?: string; key_sig?: string; require_e2e?: boolean }
+    | { nonce?: string; signature?: string; enc_pubkey?: string; key_sig?: string; require_e2e?: boolean; private_count?: boolean }
     | null;
   if (!body?.nonce || !body.signature || !body.enc_pubkey || !body.key_sig)
     return err("VALIDATION_ERROR", "nonce, signature, enc_pubkey, key_sig required.", 400);
@@ -50,9 +50,9 @@ keys.post("/:address/keys", async (c) => {
     .bind(registeredAt, address)
     .run();
   await c.env.DB.prepare(
-    `INSERT INTO keys (address, enc_pubkey, wallet_sig, require_e2e, registered_at) VALUES (?,?,?,?,?)`,
+    `INSERT INTO keys (address, enc_pubkey, wallet_sig, require_e2e, private_count, registered_at) VALUES (?,?,?,?,?,?)`,
   )
-    .bind(address, body.enc_pubkey, body.key_sig, body.require_e2e ? 1 : 0, registeredAt)
+    .bind(address, body.enc_pubkey, body.key_sig, body.require_e2e ? 1 : 0, body.private_count ? 1 : 0, registeredAt)
     .run();
   await transition(c.env, "key", address, null, "registered", body.require_e2e ? "require_e2e" : "optional");
   return c.json({ registered_at: new Date(registeredAt * 1000).toISOString(), require_e2e: Boolean(body.require_e2e) });

@@ -214,6 +214,27 @@ describe("keys + require_e2e (§12.5-6a)", () => {
     expect(new TextDecoder().decode(opened!)).toBe("the verdict you paid for");
   });
 
+  it("private_count: opted-in mailbox answers like a never-used address (#767.3)", async () => {
+    const owner = newClient();
+    const auth = await owner.challenge();
+    const kp = (await import("tweetnacl")).default.box.keyPair();
+    const encPubkey = btoa(String.fromCharCode(...kp.publicKey));
+    const keySig = await owner.account.signMessage({
+      message: `veritap-locker:register-key:${owner.address}:${encPubkey}`,
+    });
+    const reg = await fetch(`${BASE()}/v1/mb/${owner.address}/keys`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...auth, enc_pubkey: encPubkey, key_sig: keySig, private_count: true }),
+    });
+    expect(reg.status).toBe(200);
+    await sender.send(owner.address, bytes(`private-${owner.address}`), { encrypt: true });
+    const count = (await (await fetch(`${BASE()}/v1/mb/${owner.address}/count`)).json()) as { unacked: number };
+    expect(count.unacked).toBe(0); // hidden
+    const read = await owner.read(); // owner still sees it
+    expect(read.body.messages.length).toBe(1);
+  });
+
   it("invalid key_sig rejected (§12.6)", async () => {
     const owner = newClient();
     const stranger = privateKeyToAccount(generatePrivateKey());

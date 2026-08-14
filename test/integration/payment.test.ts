@@ -161,6 +161,23 @@ describe("x402 gate (§12.19-20)", () => {
     expect(replayBody.message_id).toBe("lm_seedpaid1");
   });
 
+  it("receipt_vault: distinct product, flat $0.02, fixed 365d (#767.1)", async () => {
+    const res = await send(PAY(), addr(), {
+      content_type: "application/json",
+      body_b64: bodyB64(1000),
+      product: "receipt_vault",
+    });
+    expect(res.status).toBe(402);
+    const body = (await res.json()) as { accepts: Array<{ maxAmountRequired: string }> };
+    expect(body.accepts[0]!.maxAmountRequired).toBe("20000");
+    // wrong ttl for vault rejected before payment
+    const bad = await send(PAY(), addr(), {
+      content_type: "application/json", body_b64: bodyB64(1000),
+      product: "receipt_vault", ttl_days: 30,
+    });
+    expect(bad.status).toBe(400);
+  });
+
   it("credit top-up demands payment on the paid instance (§12.19)", async () => {
     const res = await fetch(`${PAY()}/v1/mb/${addr()}/credit`, {
       method: "POST",

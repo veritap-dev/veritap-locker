@@ -4,6 +4,7 @@
  */
 
 import { err as _err, LIMITS, PRICE } from "./codes.ts";
+import { assertStorageMargin } from "./cost.ts";
 import type { Env } from "./types.ts";
 import { nowS, transition } from "./types.ts";
 
@@ -31,6 +32,7 @@ export async function nonceGc(env: Env): Promise<void> {
 
 /** Daily: burn credit for stored checkpoint bytes; manage grace → expiry. */
 export async function creditBurn(env: Env): Promise<void> {
+  await assertStorageMargin(env); // #768.3 — logs + tickets, never blocks
   const t = nowS();
   const { results } = await env.DB.prepare(
     `SELECT address, COALESCE(sum(size),0) AS bytes FROM checkpoints GROUP BY address`,
