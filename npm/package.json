@@ -1,0 +1,23 @@
+{
+  "name": "veritap-locker",
+  "version": "0.2.0",
+  "description": "Wallet-addressed mailbox + storage for AI agents. Pay to send (x402, USDC on Base); the holder of the wallet key reads free by signing. Client library + MCP stdio shim.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "bin": { "veritap-locker": "bin/shim.js" },
+  "files": ["dist", "bin", "README.md"],
+  "keywords": ["mcp", "x402", "agents", "wallet", "mailbox", "storage", "base", "usdc", "e2e", "model-context-protocol"],
+  "author": "Veritap <hello@veritap.dev>",
+  "license": "MIT",
+  "homepage": "https://locker.veritap.dev",
+  "repository": { "type": "git", "url": "https://github.com/veritap-dev/veritap-locker.git" },
+  "dependencies": {
+    "blakejs": "^1.2.1",
+    "mcp-remote": "^0.1.38",
+    "tweetnacl": "^1.0.3",
+    "viem": "^2.37.13"
+  },
+  "engines": { "node": ">=18" }
+}

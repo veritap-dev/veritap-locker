@@ -3,3 +3,4 @@ node_modules/
 .dev.vars
 coverage/
 test/fixtures/*.key
+npm/dist/
