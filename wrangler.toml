@@ -1,0 +1,29 @@
+# §0 isolation: shares NOTHING with groundtruth-router or veritap-jobs.
+name = "veritap-locker"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+preview_urls = false
+routes = [{ pattern = "locker.veritap.dev", custom_domain = true }]
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "veritap_locker"
+database_id = "c4dfb885-34de-4666-8e8b-dfde61264077"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "BODIES"
+bucket_name = "veritap-locker-bodies"
+
+[triggers]
+crons = ["*/15 * * * *", "10 5 * * *"]   # sweep · daily credit burn
+
+[vars]
+LOCKER_ENABLED = "true"
+PUBLIC_BASE_URL = "https://locker.veritap.dev"
+# RECEIVING_ADDRESS set in Phase B. Secrets: NONCE_HMAC_KEY (set via wrangler secret put).
