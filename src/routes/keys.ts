@@ -12,6 +12,7 @@ import { canonicalAddress, verifySigned } from "../auth.ts";
 import { err } from "../codes.ts";
 import type { Env } from "../types.ts";
 import { nowS, transition } from "../types.ts";
+import { sawAddress, tick } from "../metrics.ts";
 
 export const keys = new Hono<{ Bindings: Env }>();
 
@@ -55,6 +56,7 @@ keys.post("/:address/keys", async (c) => {
     .bind(address, body.enc_pubkey, body.key_sig, body.require_e2e ? 1 : 0, body.private_count ? 1 : 0, registeredAt)
     .run();
   await transition(c.env, "key", address, null, "registered", body.require_e2e ? "require_e2e" : "optional");
+  await tick(c.env, "use:key_register");
   return c.json({ registered_at: new Date(registeredAt * 1000).toISOString(), require_e2e: Boolean(body.require_e2e) });
 });
 
@@ -68,6 +70,7 @@ export const directory = new Hono<{ Bindings: Env }>().get("/:address", async (c
     .bind(address)
     .first<{ enc_pubkey: string; wallet_sig: string; require_e2e: number; registered_at: number }>();
   if (!row) return err("NOT_FOUND", "No key registered for this address.", 404);
+  await sawAddress(c.env, address, "directory");
   return c.json({
     address,
     enc_pubkey: row.enc_pubkey,

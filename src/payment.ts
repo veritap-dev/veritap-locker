@@ -19,6 +19,7 @@
  */
 
 import { CREDIT_BAZAAR, SEND_BAZAAR } from "./bazaar-metadata.ts";
+import { sawAddress, tick } from "./metrics.ts";
 import type { Env } from "./types.ts";
 import { transition } from "./types.ts";
 
@@ -220,7 +221,13 @@ export async function paymentGate(
   const payload = decodePayment(
     request.headers.get("PAYMENT-SIGNATURE") ?? request.headers.get("X-PAYMENT") ?? undefined,
   );
-  if (!payload) return { ok: false, response: respond402(quote) };
+  if (!payload) {
+    // #788 funnel: an unpaid, VALID request that received a real quote —
+    // window-shopping. (Probe 402s for invalid bodies are counted separately
+    // at their call sites.) entityForAudit is "send:.." | "credit:..".
+    await tick(env, `quote402:${entityForAudit.split(":")[0]}`);
+    return { ok: false, response: respond402(quote) };
+  }
   if (!(payload as unknown as { extensions?: unknown }).extensions)
     console.warn("PAYMENT_NO_EXTENSIONS_ECHO", { note: "buyer client did not echo extensions; Bazaar cataloging may not trigger from this payment" });
 
@@ -326,6 +333,8 @@ export async function paymentGate(
 
     await transition(env, "payment", entityForAudit, null, "settled",
       `${priceMicrousd}µ$ from ${auth.from} tx ${settle.body.transaction}`);
+    await tick(env, `settled:${entityForAudit.split(":")[0]}`); // #788 funnel: conversion
+    await sawAddress(env, auth.from, "payer");
     return { ok: true, settlement: { txHash: settle.body.transaction, payer: auth.from } };
   } catch (e) {
     // Verify-phase network failure: nothing settled, safe to call not-charged.

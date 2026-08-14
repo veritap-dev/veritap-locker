@@ -14,6 +14,7 @@ import { guardQuote } from "../cost.ts";
 import { e2eGate } from "../entropy.ts";
 import type { Env, MessageRow } from "../types.ts";
 import { nowS, sha256Hex, transition } from "../types.ts";
+import { sawAddress, tick } from "../metrics.ts";
 
 export const messages = new Hono<{ Bindings: Env }>();
 
@@ -53,6 +54,7 @@ export const nonceRoute = new Hono<{ Bindings: Env }>().get("/", async (c) => {
   const ip = c.req.header("cf-connecting-ip") ?? "?";
   if (await rateLimited(c.env, `nonce:${address}:${ip}`, LIMITS.rate_nonce_hr))
     return err("RATE_LIMITED", "Nonce issuance limit reached.", 429);
+  await sawAddress(c.env, address, "nonce");
   return c.json(await issueNonce(c.env, address));
 });
 
@@ -71,6 +73,7 @@ messages.post("/:address/messages", async (c) => {
         `${c.env.PUBLIC_BASE_URL}/v1/mb/{address}/messages`,
         `Deliver a message to a wallet-addressed mailbox. Replace {address} with a valid EVM address; base tier quote shown — actual price depends on size and TTL.`,
       );
+      await tick(c.env, "quote402:probe");
       return respond402(quote, "Payment required (and the mailbox address in the path was invalid — use a real 0x… address).");
     }
     return err("VALIDATION_ERROR", "Mailbox address must be a valid EVM address.", 400);
@@ -91,6 +94,7 @@ messages.post("/:address/messages", async (c) => {
         `${c.env.PUBLIC_BASE_URL}/v1/mb/${address}/messages`,
         `Deliver a message to the wallet-addressed mailbox ${address}. Body must match the send schema (see ${c.env.PUBLIC_BASE_URL}/llms.txt); this quote is the <=100KB base tier — actual price depends on size and TTL.`,
       );
+      await tick(c.env, "quote402:probe");
       return respond402(req, "Payment required (and the send body was invalid or empty — see docs).");
     }
     return err("VALIDATION_ERROR", "Invalid send body.", 400, {
@@ -239,28 +243,30 @@ messages.post("/:address/messages", async (c) => {
   if (bytes && r2key === null) {
     await c.env.DB.prepare(
       `INSERT INTO messages (message_id, address, producer, tag, content_type, size, inline_body, r2_key,
-         encrypted, created_at, expires_at, idempotency_key, body_hash, paid_microusd, product)
-       VALUES (?,?,?,?,?,?,?,NULL,?,?,?,?,?,?,?)`,
+         encrypted, created_at, expires_at, idempotency_key, body_hash, paid_microusd, product, payer)
+       VALUES (?,?,?,?,?,?,?,NULL,?,?,?,?,?,?,?,?)`,
     )
       .bind(
         id, address, p.producer ?? null, p.tag ?? null, p.content_type, size,
         bytes as unknown as ArrayBuffer, p.encrypted ? 1 : 0, created, expires,
-        p.idempotency_key ?? null, bodyHash, priceMicro, product,
+        p.idempotency_key ?? null, bodyHash, priceMicro, product, gate.settlement?.payer ?? null,
       )
       .run();
   } else {
     await c.env.DB.prepare(
       `INSERT INTO messages (message_id, address, producer, tag, content_type, size, inline_body, r2_key,
-         encrypted, created_at, expires_at, idempotency_key, body_hash, paid_microusd, product)
-       VALUES (?,?,?,?,?,?,NULL,?,?,?,?,?,?,?,?)`,
+         encrypted, created_at, expires_at, idempotency_key, body_hash, paid_microusd, product, payer)
+       VALUES (?,?,?,?,?,?,NULL,?,?,?,?,?,?,?,?,?)`,
     )
       .bind(
         id, address, p.producer ?? null, p.tag ?? null, p.content_type, size, r2key,
         p.encrypted ? 1 : 0, created, expires, p.idempotency_key ?? null, bodyHash, priceMicro, product,
+        gate.settlement?.payer ?? null,
       )
       .run();
   }
   await transition(c.env, "message", id, null, "stored", `${size}b ttl${ttlDays}d $${priceMicro / 1e6}`);
+  await sawAddress(c.env, address, "recipient");
   } catch (insertErr) {
     console.error("PAYMENT_ORPHAN", { message_id: id, address, paidMicrousd: priceMicro, settlement: gate.settlement, error: String(insertErr) });
     await transition(c.env, "payment", `send:${address}`, "settled", "orphaned",
@@ -337,6 +343,7 @@ messages.post("/:address/read", async (c) => {
           : {}),
     });
   }
+  await tick(c.env, "use:read");
   const last = (results ?? [])[results!.length - 1];
   return c.json({
     messages: out,
@@ -371,6 +378,7 @@ messages.post("/:address/ack", async (c) => {
     acked++;
   }
   await transition(c.env, "mailbox", address, null, "acked", `${acked} messages`);
+  await tick(c.env, "use:ack");
   return c.json({ acked });
 });
 

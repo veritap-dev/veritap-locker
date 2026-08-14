@@ -9,6 +9,8 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "agents/mcp/server";
 
 import { err, LIMITS } from "./codes.ts";
+import { adminPanel } from "./admin.ts";
+import { tick } from "./metrics.ts";
 import { registerLockerTools } from "./mcp.ts";
 import { openapiDoc } from "./openapi.ts";
 import { rateLimited } from "./auth.ts";
@@ -109,8 +111,14 @@ checkpoint byte-for-byte. A fresh process holding only the key IS the owner.
 - Paid listing verification: https://jobs.veritap.dev/mcp
 `;
 
-app.get("/llms.txt", (c) => c.text(LLMS_TXT));
-app.get("/openapi.json", (c) => c.json(openapiDoc(c.env.PUBLIC_BASE_URL)));
+app.get("/llms.txt", (c) => {
+  c.executionCtx.waitUntil(tick(c.env, "disc:llms_txt"));
+  return c.text(LLMS_TXT);
+});
+app.get("/openapi.json", (c) => {
+  c.executionCtx.waitUntil(tick(c.env, "disc:openapi"));
+  return c.json(openapiDoc(c.env.PUBLIC_BASE_URL));
+});
 app.get("/favicon.ico", (c) =>
   new Response(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#1a1d29"/><path d="M9 14v-3a7 7 0 0 1 14 0v3" fill="none" stroke="#f5a623" stroke-width="2.5"/><rect x="7" y="14" width="18" height="12" rx="2" fill="#f5a623"/><circle cx="16" cy="19.5" r="2" fill="#1a1d29"/><rect x="15" y="20" width="2" height="3.5" fill="#1a1d29"/></svg>`,
@@ -183,6 +191,32 @@ app.get("/v1/status", (c) =>
 // Phase C (#778/#781): MCP adapter — thin self-dispatch into this same app,
 // so every guard and gate above applies to MCP calls identically.
 app.all("/mcp", (c) => {
+  // #788 funnel: count discovery-shaped MCP calls (tools/list = "someone
+  // found us"; per-tool calls show what they reach for). Best-effort peek,
+  // never blocks the request.
+  if (c.req.method === "POST") {
+    c.executionCtx.waitUntil(
+      c.req.raw
+        .clone()
+        .json()
+        .then((body: unknown) => {
+          const msgs = Array.isArray(body) ? body : [body];
+          return Promise.all(
+            msgs.map((m) => {
+              const method = (m as { method?: string })?.method;
+              if (method === "tools/list") return tick(c.env, "disc:tools_list");
+              if (method === "initialize") return tick(c.env, "disc:mcp_initialize");
+              if (method === "tools/call") {
+                const name = (m as { params?: { name?: string } })?.params?.name ?? "unknown";
+                return tick(c.env, `mcp:${name.replace(/[^a-z0-9_]/gi, "").slice(0, 40)}`);
+              }
+              return Promise.resolve();
+            }),
+          );
+        })
+        .catch(() => {}),
+    );
+  }
   const handler = createMcpHandler(
     (mcpCtx: { requestInfo?: Request }) => {
       const server = new McpServer(
@@ -204,6 +238,10 @@ app.all("/mcp", (c) => {
   );
   return handler(c.req.raw, c.env as never, c.executionCtx as never);
 });
+
+// #788: read-only adoption panel (ADMIN_KEY-gated; 404 without it).
+app.get("/admin", (c) => adminPanel(c.env, c.req.query("k") ?? null));
+app.get("/admin/status", (c) => adminPanel(c.env, c.req.query("k") ?? null));
 
 app.route("/v1/nonce", nonceRoute);
 app.route("/v1/mb", messages);

@@ -10,6 +10,10 @@ export interface Env {
   DAILY_COST_BUDGET_USD?: string;
   /** #773-B4: "true" bypasses the mass-delete tripwire for one operator-approved sweep. */
   TRIPWIRE_OVERRIDE?: string;
+  /** #788: comma-separated wallets that are US (test buyer, operator) — never counted as adoption. */
+  SELF_ADDRESSES?: string;
+  /** #788: bearer for the read-only /admin panel (wrangler secret). */
+  ADMIN_KEY?: string;
   PUBLIC_BASE_URL: string;
   NONCE_HMAC_KEY?: string;
   /** Phase B: x402 receiving address (address only — key never touches the server). */

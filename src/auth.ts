@@ -13,6 +13,7 @@
 import { getAddress, recoverMessageAddress, isAddress } from "viem";
 import type { Env } from "./types.ts";
 import { LIMITS } from "./codes.ts";
+import { sawAddress } from "./metrics.ts";
 
 const enc = new TextEncoder();
 
@@ -117,6 +118,7 @@ export async function verifySigned(
     await bumpCounter(env, coolBucket, nowS);
     return { ok: false, code: "INVALID_SIGNATURE", message: "Signature does not recover to this address." };
   }
+  await sawAddress(env, address, "auth"); // #788: a wallet proved itself — adoption signal
   return { ok: true, address };
 }
 

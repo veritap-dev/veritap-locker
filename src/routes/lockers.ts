@@ -12,6 +12,7 @@ import { signedGetUrl, signedPutUrl } from "../blob.ts";
 import { err, LIMITS, PRICE } from "../codes.ts";
 import type { Env } from "../types.ts";
 import { nowS, transition } from "../types.ts";
+import { tick } from "../metrics.ts";
 
 export const lockers = new Hono<{ Bindings: Env }>();
 
@@ -103,6 +104,7 @@ lockers.put("/:address/locker/:slot", async (c) => {
   }
 
   await transition(c.env, "checkpoint", `${address}/${slot}`, null, `v${version}`, `${size}b`);
+  await tick(c.env, "use:checkpoint_save");
   return c.json({ version, upload_url: await signedPutUrl(c.env, `ckpt/${address}/${slot}/${version}`, size) });
 });
 
@@ -181,6 +183,7 @@ lockers.post("/:address/credit", async (c) => {
         `${c.env.PUBLIC_BASE_URL}/v1/mb/{address}/credit`,
         `Storage credit top-up. Replace {address} with a valid EVM address; minimum $1 quote shown.`,
       );
+      await tick(c.env, "quote402:probe");
       return respond402(quote, "Payment required (and the address in the path was invalid — use a real 0x… address).");
     }
     return err("VALIDATION_ERROR", "Invalid address.", 400);
@@ -201,6 +204,7 @@ lockers.post("/:address/credit", async (c) => {
       `${c.env.PUBLIC_BASE_URL}/v1/mb/${address}/credit`,
       `Storage credit top-up for ${address}: checkpoints survive you at $0.50/GB-month. Minimum $1; this quote is the minimum — set amount_microusd to the amount you pay.`,
     );
+    await tick(c.env, "quote402:probe");
     return respond402(quote, "Payment required (and amount_microusd was missing or below the $1 minimum).");
   }
   if (!Number.isInteger(amount) || amount <= 0)
