@@ -37,7 +37,7 @@ function makeCall(env: Env, dispatch: Dispatch, original: Request | undefined) {
     const ip = original?.headers.get("cf-connecting-ip");
     if (ip) headers["cf-connecting-ip"] = ip;
     if (body !== undefined) headers["Content-Type"] = "application/json";
-    if (paymentB64) headers["X-PAYMENT"] = paymentB64;
+    if (paymentB64) headers["PAYMENT-SIGNATURE"] = paymentB64;
     const res = await dispatch(
       new Request(`${env.PUBLIC_BASE_URL}${path}`, {
         method,
@@ -115,9 +115,10 @@ export function registerLockerTools(server: McpServer, env: Env, dispatch: Dispa
         },
         payment: {
           protocol: "x402",
+          version: 2,
           network: env.X402_NETWORK ?? "base",
           asset: "USDC",
-          flow: "Call a paid tool without payment_b64 → receive accepts[] requirements → sign an EIP-3009 transferWithAuthorization → retry with payment_b64 (the base64 X-PAYMENT payload).",
+          flow: "Call a paid tool without payment_b64 → receive accepts[] requirements (x402 v2: CAIP-2 network, amount in atomic units) → sign an EIP-3009 transferWithAuthorization → retry with payment_b64 (the base64 PAYMENT-SIGNATURE payload).",
         },
         e2e: {
           require_e2e:

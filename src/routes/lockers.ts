@@ -7,7 +7,7 @@
 import { Hono } from "hono";
 
 import { canonicalAddress, verifySigned } from "../auth.ts";
-import { paymentGate, paymentsEnabled } from "../payment.ts";
+import { paymentGate, paymentResponseHeader, paymentsEnabled } from "../payment.ts";
 import { signedGetUrl, signedPutUrl } from "../blob.ts";
 import { err, LIMITS, PRICE } from "../codes.ts";
 import type { Env } from "../types.ts";
@@ -207,7 +207,11 @@ lockers.post("/:address/credit", async (c) => {
   )
     .bind(address, amount, nowS())
     .run();
-  return c.json({ credited_microusd: amount, paid: paymentsEnabled(c.env) });
+  return c.json(
+    { credited_microusd: amount, paid: paymentsEnabled(c.env) },
+    200,
+    gate.settlement ? { "PAYMENT-RESPONSE": paymentResponseHeader(gate.settlement) } : {},
+  );
 });
 
 // ---- status: GET /v1/mb/:address/status (free; balances + projections) ----

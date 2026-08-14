@@ -7,7 +7,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import { canonicalAddress, issueNonce, rateLimited, verifySigned } from "../auth.ts";
-import { paymentGate } from "../payment.ts";
+import { buildRequirements, paymentGate, paymentResponseHeader, paymentsEnabled, respond402 } from "../payment.ts";
 import { signedGetUrl, signedPutUrl } from "../blob.ts";
 import { err, LIMITS, priceForMessage, RECEIPT_VAULT } from "../codes.ts";
 import { guardQuote } from "../cost.ts";
@@ -62,10 +62,26 @@ messages.post("/:address/messages", async (c) => {
   if (!address) return err("VALIDATION_ERROR", "Mailbox address must be a valid EVM address.", 400);
 
   const parsed = SendSchema.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success)
+  if (!parsed.success) {
+    // Discovery probes (CDP Bazaar validate, x402 crawlers) POST bare bodies
+    // expecting the 402 + requirements shape. Without a payment attached,
+    // answer 402 at the base tier so the resource is indexable — nobody is
+    // charged here (settlement only ever runs after full validation below).
+    // With a payment attached, an invalid body stays a hard 400: never settle
+    // what we can't deliver.
+    if (paymentsEnabled(c.env) && !c.req.header("X-PAYMENT")) {
+      const req = buildRequirements(
+        c.env,
+        priceForMessage(1, LIMITS.ttl_default_days),
+        `${c.env.PUBLIC_BASE_URL}/v1/mb/${address}/messages`,
+        `Deliver a message to the wallet-addressed mailbox ${address}. Body must match the send schema (see ${c.env.PUBLIC_BASE_URL}/llms.txt); this quote is the <=100KB base tier — actual price depends on size and TTL.`,
+      );
+      return respond402(req, "Payment required (and the send body was invalid or empty — see docs).");
+    }
     return err("VALIDATION_ERROR", "Invalid send body.", 400, {
       details: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
     });
+  }
   const p = parsed.data;
 
   // Body: inline XOR upload.
@@ -244,6 +260,7 @@ messages.post("/:address/messages", async (c) => {
       ...(r2key ? { upload_url: await signedPutUrl(c.env, r2key, size) } : {}),
     },
     201,
+    gate.settlement ? { "PAYMENT-RESPONSE": paymentResponseHeader(gate.settlement) } : {},
   );
 });
 

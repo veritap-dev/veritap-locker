@@ -26,7 +26,7 @@ const send = (base: string, to: string, body: Record<string, unknown>, payment?:
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(payment ? { "X-PAYMENT": payment } : {}),
+      ...(payment ? { "PAYMENT-SIGNATURE": payment } : {}),
     },
     body: JSON.stringify(body),
   });
@@ -36,11 +36,11 @@ describe("x402 gate (§12.19-20)", () => {
     const res = await send(PAY(), addr(), { content_type: "text/plain", body_b64: bodyB64(1000) });
     expect(res.status).toBe(402);
     const body = (await res.json()) as { x402Version: number; accepts: Array<Record<string, unknown>> };
-    expect(body.x402Version).toBe(1);
+    expect(body.x402Version).toBe(2);
     const req = body.accepts[0]!;
     expect(req.scheme).toBe("exact");
-    expect(req.network).toBe("base-sepolia");
-    expect(req.maxAmountRequired).toBe("10000"); // ≤100KB, default TTL = $0.01
+    expect(req.network).toBe("eip155:84532");
+    expect(req.amount).toBe("10000"); // ≤100KB, default TTL = $0.01
     expect(req.payTo).toBe(RECEIVING);
     expect(req.asset).toBe(SEPOLIA_USDC);
   });
@@ -51,9 +51,9 @@ describe("x402 gate (§12.19-20)", () => {
       body_b64: bodyB64(1000),
       ttl_days: 365,
     });
-    const body = (await res.json()) as { accepts: Array<{ maxAmountRequired: string }> };
+    const body = (await res.json()) as { accepts: Array<{ amount: string }> };
     // base 10000 + ceil(335/90)=4 × 10000 = 50000 µ$ ($0.05)
-    expect(body.accepts[0]!.maxAmountRequired).toBe("50000");
+    expect(body.accepts[0]!.amount).toBe("50000");
   });
 
   it("oversize still 413 BEFORE payment — no charge (§12.8)", async () => {
@@ -68,9 +68,16 @@ describe("x402 gate (§12.19-20)", () => {
   it("underpaid authorization rejected locally, never settled (§12.19)", async () => {
     const payment = btoa(
       JSON.stringify({
-        x402Version: 1,
-        scheme: "exact",
-        network: "base-sepolia",
+        x402Version: 2,
+        accepted: {
+          scheme: "exact",
+          network: "eip155:84532",
+          amount: "10000",
+          asset: SEPOLIA_USDC,
+          payTo: RECEIVING,
+          maxTimeoutSeconds: 300,
+          extra: { name: "USDC", version: "2" },
+        },
         payload: {
           signature: "0x" + "ab".repeat(65),
           authorization: {
@@ -93,9 +100,16 @@ describe("x402 gate (§12.19-20)", () => {
   it("wrong recipient rejected locally (§12.19)", async () => {
     const payment = btoa(
       JSON.stringify({
-        x402Version: 1,
-        scheme: "exact",
-        network: "base-sepolia",
+        x402Version: 2,
+        accepted: {
+          scheme: "exact",
+          network: "eip155:84532",
+          amount: "10000",
+          asset: SEPOLIA_USDC,
+          payTo: RECEIVING,
+          maxTimeoutSeconds: 300,
+          extra: { name: "USDC", version: "2" },
+        },
         payload: {
           signature: "0x" + "ab".repeat(65),
           authorization: {
@@ -117,9 +131,16 @@ describe("x402 gate (§12.19-20)", () => {
     const to = addr();
     const payment = btoa(
       JSON.stringify({
-        x402Version: 1,
-        scheme: "exact",
-        network: "base-sepolia",
+        x402Version: 2,
+        accepted: {
+          scheme: "exact",
+          network: "eip155:84532",
+          amount: "10000",
+          asset: SEPOLIA_USDC,
+          payTo: RECEIVING,
+          maxTimeoutSeconds: 300,
+          extra: { name: "USDC", version: "2" },
+        },
         payload: {
           signature: "0x" + "ab".repeat(65),
           authorization: {
@@ -168,8 +189,8 @@ describe("x402 gate (§12.19-20)", () => {
       product: "receipt_vault",
     });
     expect(res.status).toBe(402);
-    const body = (await res.json()) as { accepts: Array<{ maxAmountRequired: string }> };
-    expect(body.accepts[0]!.maxAmountRequired).toBe("20000");
+    const body = (await res.json()) as { accepts: Array<{ amount: string }> };
+    expect(body.accepts[0]!.amount).toBe("20000");
     // wrong ttl for vault rejected before payment
     const bad = await send(PAY(), addr(), {
       content_type: "application/json", body_b64: bodyB64(1000),
@@ -185,7 +206,7 @@ describe("x402 gate (§12.19-20)", () => {
       body: JSON.stringify({ amount_microusd: 2_000_000 }),
     });
     expect(res.status).toBe(402);
-    const body = (await res.json()) as { accepts: Array<{ maxAmountRequired: string }> };
-    expect(body.accepts[0]!.maxAmountRequired).toBe("2000000");
+    const body = (await res.json()) as { accepts: Array<{ amount: string }> };
+    expect(body.accepts[0]!.amount).toBe("2000000");
   });
 });

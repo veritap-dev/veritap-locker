@@ -3,7 +3,7 @@
  * applies migrations, waits for health. Every `vitest run` starts clean.
  */
 import { spawn, execSync, type ChildProcess } from "node:child_process";
-import { rmSync } from "node:fs";
+import { openSync, rmSync } from "node:fs";
 
 const PORT = 8788;
 const PAY_PORT = 8789;
@@ -29,7 +29,7 @@ export async function setup() {
     ["wrangler", "dev", "--port", String(PORT), "--persist-to", STATE, "--test-scheduled",
      "--var", "NONCE_HMAC_KEY:test-hmac-key-0123456789abcdef", "--var", `PUBLIC_BASE_URL:http://localhost:${PORT}`,
      "--var", "X402_ENABLED:false"],
-    { stdio: "ignore", detached: false },
+    { stdio: ["ignore", openSync("/tmp/locker-dev-free.log", "w"), openSync("/tmp/locker-dev-free.log", "w")], detached: false },
   );
   // Second instance, OWN persist dir (two wranglers deadlock on shared state locks),
   // payments enabled,
@@ -42,9 +42,10 @@ export async function setup() {
      "--var", "X402_ENABLED:true", "--var", "X402_NETWORK:base-sepolia",
      "--var", "RECEIVING_ADDRESS:0x5c7872C6aA7Da867F52733Cebf469f4b9A113f2B",
      "--var", "FACILITATOR_URL:http://localhost:19999"],
-    { stdio: "ignore", detached: false },
+    { stdio: ["ignore", openSync("/tmp/locker-dev-pay.log", "w"), openSync("/tmp/locker-dev-pay.log", "w")], detached: false },
   );
-  const deadline = Date.now() + 120_000;
+  // Two instances bundling the MCP deps concurrently can exceed 2 min cold.
+  const deadline = Date.now() + 240_000;
   while (Date.now() < deadline) {
     try {
       const res = await fetch(`http://localhost:${PORT}/v1/health`);

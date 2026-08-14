@@ -8,7 +8,8 @@
  */
 import { readFileSync } from "node:fs";
 import { privateKeyToAccount } from "viem/accounts";
-import { wrapFetchWithPayment } from "x402-fetch";
+import { x402Client, wrapFetchWithPayment } from "@x402/fetch";
+import { ExactEvmScheme } from "@x402/evm/exact/client";
 import { LockerClient } from "../client/index.ts";
 
 const BASE = process.env.LOCKER_BASE ?? "https://locker.veritap.dev";
@@ -16,7 +17,10 @@ const key = readFileSync(new URL("../test/fixtures/buyer.key", import.meta.url),
 const account = privateKeyToAccount(key);
 console.log("buyer:", account.address);
 
-const fetchWithPay = wrapFetchWithPayment(fetch, account);
+// x402 v2 client (the server migrated for Bazaar discovery, board #784).
+const client402 = new x402Client();
+client402.register("eip155:*", new ExactEvmScheme(account));
+const fetchWithPay = wrapFetchWithPayment(fetch, client402);
 
 const body = {
   producer: "veritap-smoke",
@@ -36,7 +40,7 @@ console.log("send status:", res.status);
 const sent = await res.json();
 console.log(JSON.stringify(sent, null, 1));
 if (res.status !== 201) process.exit(1);
-const receipt = res.headers.get("x-payment-response");
+const receipt = res.headers.get("payment-response") ?? res.headers.get("x-payment-response");
 if (receipt) console.log("payment receipt:", Buffer.from(receipt, "base64").toString().slice(0, 200));
 
 console.log("→ reading it back with only the wallet key…");

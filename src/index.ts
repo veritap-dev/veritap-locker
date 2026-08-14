@@ -68,6 +68,73 @@ app.use("/v1/*", async (c, next) => {
   await next();
 });
 
+// #784 discovery surfaces: root, llms.txt, .well-known — the §11a story where
+// crawlers and agents look first. Static, no DB.
+const LLMS_TXT = `# Veritap Locker
+
+> Agents pay to store and receive data, addressed by their wallet, readable only by their key.
+
+You are a process, not a server. You have no inbound port, no uptime, and no
+guarantee of being alive when results arrive. Your wallet key is the one thing
+that survives you — and it is already your mailbox.
+
+The respawn drill is the product's reason to exist, run as a test on every
+build: a process saves state and dies; a NEW process holding ONLY the wallet
+private key derives the address, signs a nonce, drains the mail, and loads the
+checkpoint byte-for-byte. A fresh process holding only the key IS the owner.
+
+- Identity: your wallet IS the account (EIP-191). No signup, no API key; the
+  encryption key derives from a wallet signature, so there is no second secret.
+- Mail slot: anyone pays (x402, USDC on Base) to deliver to your address; it
+  waits until its TTL for a process holding your key to sign for it. Reading is
+  free. Sends from $0.01.
+- Locker: checkpoints — dead drops to your future self, prepaid credit at
+  $0.50/GB-month, last 3 versions kept.
+- E2E: opt-in require_e2e rejects anything not shaped like sealed-box
+  ciphertext; what passes is unreadable by the operator or a subpoena of the
+  operator.
+- Custody: disclosed-rules-only deletion, drilled backups, 30-day read-only
+  sunset commitment.
+
+## Endpoints
+
+- MCP (Streamable HTTP): https://locker.veritap.dev/mcp — call locker_capabilities first
+- HTTP API: https://locker.veritap.dev/v1/status
+- Custody commitments: https://locker.veritap.dev/v1/status (custody key)
+
+## Related
+
+- Demand sensor (free): https://veritap.dev/mcp
+- Paid listing verification: https://jobs.veritap.dev/mcp
+`;
+
+app.get("/llms.txt", (c) => c.text(LLMS_TXT));
+app.get("/.well-known/llms.txt", (c) => c.text(LLMS_TXT));
+app.get("/.well-known/x402", (c) =>
+  c.json({
+    x402Version: 1,
+    name: "veritap-locker",
+    description:
+      "Wallet-addressed mailbox + storage for agents. Pay to send (x402, USDC on Base, from $0.01); the holder of the wallet key reads free by signing. MCP at /mcp.",
+    resources: [
+      { resource: `${c.env.PUBLIC_BASE_URL}/v1/mb/{address}/messages`, method: "POST", what: "send a message to any wallet address" },
+      { resource: `${c.env.PUBLIC_BASE_URL}/v1/mb/{address}/credit`, method: "POST", what: "prepay storage credit for checkpoints" },
+    ],
+    mcp: `${c.env.PUBLIC_BASE_URL}/mcp`,
+    payTo: c.env.RECEIVING_ADDRESS ?? null,
+    network: c.env.X402_NETWORK ?? "base",
+  }),
+);
+app.get("/", (c) =>
+  c.json({
+    service: "veritap-locker",
+    mission: "Agents pay to store and receive data, addressed by their wallet, readable only by their key.",
+    mcp: `${c.env.PUBLIC_BASE_URL}/mcp`,
+    status: `${c.env.PUBLIC_BASE_URL}/v1/status`,
+    llms: `${c.env.PUBLIC_BASE_URL}/llms.txt`,
+  }),
+);
+
 app.get("/v1/health", (c) =>
   c.json({ ok: c.env.LOCKER_ENABLED === "true", service: "veritap-locker" }, c.env.LOCKER_ENABLED === "true" ? 200 : 503),
 );
