@@ -5,8 +5,11 @@
  */
 
 import { Hono } from "hono";
+import { McpServer } from "@modelcontextprotocol/server";
+import { createMcpHandler } from "agents/mcp/server";
 
 import { err, LIMITS } from "./codes.ts";
+import { registerLockerTools } from "./mcp.ts";
 import { rateLimited } from "./auth.ts";
 import { runCron } from "./cron.ts";
 import { acceptUpload, serveBlob } from "./blob.ts";
@@ -101,6 +104,31 @@ app.get("/v1/status", (c) =>
     },
   }),
 );
+
+// Phase C (#778/#781): MCP adapter — thin self-dispatch into this same app,
+// so every guard and gate above applies to MCP calls identically.
+app.all("/mcp", (c) => {
+  const handler = createMcpHandler(
+    (mcpCtx: { requestInfo?: Request }) => {
+      const server = new McpServer(
+        { name: "veritap-locker", version: "0.1.0" },
+        {
+          instructions:
+            "Agents pay to store and receive data, addressed by their wallet, readable only by their key. Your wallet IS the account — no signup, no API key. Call locker_capabilities first for the full contract (identity, prices, custody commitments, x402 payment flow). Reading is free; sends and storage are paid. Mail waits until a process holding your key signs for it.",
+        },
+      );
+      registerLockerTools(
+        server,
+        c.env,
+        (req) => Promise.resolve(app.fetch(req, c.env, c.executionCtx)),
+        mcpCtx.requestInfo ?? c.req.raw,
+      );
+      return server;
+    },
+    { route: "/mcp" },
+  );
+  return handler(c.req.raw, c.env as never, c.executionCtx as never);
+});
 
 app.route("/v1/nonce", nonceRoute);
 app.route("/v1/mb", messages);
