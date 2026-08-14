@@ -59,7 +59,22 @@ export const nonceRoute = new Hono<{ Bindings: Env }>().get("/", async (c) => {
 // ---- send: POST /v1/mb/:address/messages (x402-metered; Phase A pass-through) ----
 messages.post("/:address/messages", async (c) => {
   const address = canonicalAddress(c.req.param("address"));
-  if (!address) return err("VALIDATION_ERROR", "Mailbox address must be a valid EVM address.", 400);
+  if (!address) {
+    // Discovery probes (x402scan et al.) hit the literal `{address}` template
+    // expecting the paywall to answer before path validation. Without a
+    // payment attached, quote the base tier; a real (paid) request with a bad
+    // address stays a hard 400.
+    if (paymentsEnabled(c.env) && !c.req.header("PAYMENT-SIGNATURE") && !c.req.header("X-PAYMENT")) {
+      const quote = buildRequirements(
+        c.env,
+        priceForMessage(1, LIMITS.ttl_default_days),
+        `${c.env.PUBLIC_BASE_URL}/v1/mb/{address}/messages`,
+        `Deliver a message to a wallet-addressed mailbox. Replace {address} with a valid EVM address; base tier quote shown — actual price depends on size and TTL.`,
+      );
+      return respond402(quote, "Payment required (and the mailbox address in the path was invalid — use a real 0x… address).");
+    }
+    return err("VALIDATION_ERROR", "Mailbox address must be a valid EVM address.", 400);
+  }
 
   const parsed = SendSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {

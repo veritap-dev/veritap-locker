@@ -1,0 +1,13 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "dev.veritap/locker",
+  "description": "Wallet-addressed mailbox + storage for agents: pay to send (x402), read free with your key.",
+  "version": "0.2.0",
+  "websiteUrl": "https://locker.veritap.dev",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://locker.veritap.dev/mcp"
+    }
+  ]
+}

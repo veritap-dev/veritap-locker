@@ -171,7 +171,20 @@ lockers.post("/:address/locker/:slot/delete", async (c) => {
 // ---- credit top-up (Phase A: manual/test grants; x402 in Phase B) ----
 lockers.post("/:address/credit", async (c) => {
   const address = canonicalAddress(c.req.param("address"));
-  if (!address) return err("VALIDATION_ERROR", "Invalid address.", 400);
+  if (!address) {
+    // Same discovery-probe rule as the send route: paywall answers before
+    // path validation when no payment is attached.
+    if (paymentsEnabled(c.env) && !c.req.header("PAYMENT-SIGNATURE") && !c.req.header("X-PAYMENT")) {
+      const quote = buildRequirements(
+        c.env,
+        PRICE.credit_min_topup_microusd,
+        `${c.env.PUBLIC_BASE_URL}/v1/mb/{address}/credit`,
+        `Storage credit top-up. Replace {address} with a valid EVM address; minimum $1 quote shown.`,
+      );
+      return respond402(quote, "Payment required (and the address in the path was invalid — use a real 0x… address).");
+    }
+    return err("VALIDATION_ERROR", "Invalid address.", 400);
+  }
   const body = (await c.req.json().catch(() => null)) as { amount_microusd?: number } | null;
   const amount = body?.amount_microusd ?? 0;
   // L2: must be a positive integer (microusd == atomic USDC units). A fractional
