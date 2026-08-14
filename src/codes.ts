@@ -13,6 +13,7 @@ export const CODES = [
   "GRACE_READONLY",
   "RATE_LIMITED",
   "LOCKER_DISABLED",
+  "WRITES_OFF",
   "NOT_FOUND",
 ] as const;
 export type Code = (typeof CODES)[number];
@@ -58,6 +59,16 @@ export const LIMITS = {
   rate_count_hr: 60,
   sig_fail_backoff_after: 5,
   sig_fail_cooldown_seconds: 900,
+  /** #773-A3: a signed GET link is redeemable a handful of times within its
+   * 15-min window, not millions — kills the free-amplification path. */
+  blob_get_redemptions: 3,
+  /** #773-A4 / M6: coarse per-IP ceiling on free GETs — the per-(address,IP)
+   * caps are bypassable by rotating addresses; this one is not. */
+  rate_ip_free_hr: 3600,
+  /** #773-A1: per-request cost estimate for the spend breaker. ~$3/M covers
+   * the worker request + its D1 ops at CF list prices; precision not required
+   * — the breaker is a ceiling, not a meter. */
+  breaker_est_req_cost_microusd: 3,
 } as const;
 
 /** #767.1: receipt-vault — $0.02 flat, ≤32KB, kept 365d. Distinct product

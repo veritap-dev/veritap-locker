@@ -7,7 +7,7 @@
  *   PUT /v1/upload/{r2key}?exp=&size=&sig=  sig = HMAC("upload:{key}:{size}:{exp}")
  */
 
-import { hmacHex } from "./auth.ts";
+import { bumpCounter, hmacHex } from "./auth.ts";
 import { err, LIMITS } from "./codes.ts";
 import type { Env } from "./types.ts";
 import { nowS } from "./types.ts";
@@ -36,6 +36,12 @@ export async function serveBlob(env: Env, r2key: string, exp: string | null, sig
   if (!exp || !sig || Number(exp) < nowS()) return err("NOT_FOUND", "Link expired or invalid.", 404);
   if (!timingSafeEqual(await hmacHex(env, `blob:${r2key}:${exp}`), sig))
     return err("NOT_FOUND", "Link expired or invalid.", 404);
+  // #773-A3: a signed link redeems a few times, not millions — one $0.05
+  // message must not become a free CDN. Hour-window counter keyed by the MAC
+  // itself; worst case across a window boundary is 2x the cap, still tiny.
+  const uses = await bumpCounter(env, `blobget:${sig.slice(0, 32)}`, nowS());
+  if (uses > LIMITS.blob_get_redemptions)
+    return err("NOT_FOUND", "Link redemption limit reached — request a fresh URL via a signed read.", 404);
   const obj = await env.BODIES.get(r2key);
   if (!obj)
     return err("NOT_FOUND", "Body unavailable — retry shortly.", 503, { retry_after_seconds: 30 });

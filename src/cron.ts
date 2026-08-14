@@ -9,8 +9,39 @@ import { assertStorageMargin } from "./cost.ts";
 import type { Env } from "./types.ts";
 import { nowS, transition } from "./types.ts";
 
+/**
+ * #773-B4 mass-delete tripwire: a sweep that would remove a suspiciously large
+ * slice of live data ABORTS and tickets instead. A bug in TTL math must fail
+ * loud, not empty the lockers. Absolute floor of 50 so small-corpus churn
+ * (10 rows, all legitimately expiring) never trips it.
+ */
+export const tripwireExceeded = (candidates: number, live: number): boolean =>
+  candidates > 50 && candidates > live * 0.05;
+
+async function tripwireAbort(env: Env, sweep: string, candidates: number, live: number): Promise<boolean> {
+  if (!tripwireExceeded(candidates, live) || env.TRIPWIRE_OVERRIDE === "true") return false;
+  console.error("TRIPWIRE", { sweep, candidates, live });
+  await transition(env, "tripwire", sweep, "armed", "tripped", `${candidates} of ${live} live rows`);
+  await env.DB.prepare(
+    `INSERT INTO tickets (wallet, kind, description, created_at) VALUES ('system', 'ops', ?, ?)`,
+  )
+    .bind(
+      `mass-delete tripwire: ${sweep} wanted to remove ${candidates} of ${live} live rows — aborted; verify TTL math, then set TRIPWIRE_OVERRIDE=true for one approved run`,
+      nowS(),
+    )
+    .run()
+    .catch(() => {});
+  return true;
+}
+
 export async function sweepExpired(env: Env): Promise<number> {
   const t = nowS();
+  const counts = await env.DB.prepare(
+    `SELECT count(*) AS live, sum(CASE WHEN expires_at < ?1 THEN 1 ELSE 0 END) AS cand FROM messages WHERE acked_at IS NULL`,
+  )
+    .bind(t)
+    .first<{ live: number; cand: number | null }>();
+  if (await tripwireAbort(env, "sweepExpired", counts?.cand ?? 0, counts?.live ?? 0)) return 0;
   const { results } = await env.DB.prepare(
     `SELECT message_id, r2_key FROM messages WHERE acked_at IS NULL AND expires_at < ? LIMIT 500`,
   )
@@ -28,7 +59,17 @@ export async function sweepExpired(env: Env): Promise<number> {
 
 export async function nonceGc(env: Env): Promise<void> {
   await env.DB.prepare(`DELETE FROM nonces WHERE expires_at < ?`).bind(nowS() - 3600).run();
-  await env.DB.prepare(`DELETE FROM rate_counters WHERE window_start < ?`).bind(nowS() - 7200).run();
+  // Persistent buckets are exempt: the orphangc cursor (window_start=0) was
+  // being wiped HERE every run — resetting the M5 scan to the first 100 keys —
+  // and spendday counters live a whole UTC day.
+  await env.DB.prepare(
+    `DELETE FROM rate_counters WHERE window_start < ? AND bucket NOT LIKE 'orphangc:%' AND bucket NOT LIKE 'spendday:%'`,
+  )
+    .bind(nowS() - 7200)
+    .run();
+  await env.DB.prepare(`DELETE FROM rate_counters WHERE bucket LIKE 'spendday:%' AND window_start < ?`)
+    .bind(nowS() - 3 * 86_400)
+    .run();
 }
 
 /** Daily: burn credit for stored checkpoint bytes; manage grace → expiry. */
@@ -86,6 +127,11 @@ export async function creditBurn(env: Env): Promise<void> {
       const { results: cps } = await env.DB.prepare(`SELECT r2_key FROM checkpoints WHERE address=?`)
         .bind(r.address)
         .all<{ r2_key: string }>();
+      // #773-B4: even a by-the-rules grace expiry aborts if it would delete a
+      // large slice of ALL checkpoints at once — that pattern smells like a
+      // grace-clock bug, and a ticket costs a day while a bad delete is forever.
+      const total = await env.DB.prepare(`SELECT count(*) AS n FROM checkpoints`).first<{ n: number }>();
+      if (await tripwireAbort(env, `graceExpiry:${r.address}`, cps?.length ?? 0, total?.n ?? 0)) continue;
       for (const cp of cps ?? []) await env.BODIES.delete(cp.r2_key).catch(() => {});
       await env.DB.prepare(`DELETE FROM checkpoints WHERE address=?`).bind(r.address).run();
       await env.DB.prepare(
@@ -124,9 +170,51 @@ export async function orphanGc(env: Env): Promise<void> {
       .run();
 }
 
+/** #773-B2: nightly D1 export to the separate backup bucket, 30-day rotation.
+ * BLOB columns exported as hex so the dump is plain JSON. Optional binding —
+ * local dev and tests run without it. */
+export async function backupExport(env: Env): Promise<void> {
+  if (!env.BACKUP) return;
+  const day = new Date(nowS() * 1000).toISOString().slice(0, 10);
+  const dump: Record<string, unknown[]> = {};
+  const tables: Array<[string, string]> = [
+    ["keys", `SELECT * FROM keys`],
+    ["messages", `SELECT message_id, address, producer, tag, content_type, size, hex(inline_body) AS inline_body_hex, r2_key, encrypted, created_at, expires_at, acked_at, idempotency_key, body_hash, paid_microusd, product FROM messages`],
+    ["checkpoints", `SELECT * FROM checkpoints`],
+    ["credits", `SELECT * FROM credits`],
+    ["credit_events", `SELECT * FROM credit_events`],
+    ["tickets", `SELECT * FROM tickets`],
+    ["state_transitions", `SELECT * FROM state_transitions`],
+  ];
+  for (const [name, sql] of tables) {
+    const { results } = await env.DB.prepare(sql).all();
+    dump[name] = results ?? [];
+  }
+  await env.BACKUP.put(`d1/${day}.json`, JSON.stringify({ exported_at: nowS(), tables: dump }), {
+    httpMetadata: { contentType: "application/json" },
+  });
+  // Rotate: drop dumps older than 30 days (date is in the key).
+  const cutoff = new Date((nowS() - 30 * 86_400) * 1000).toISOString().slice(0, 10);
+  const list = await env.BACKUP.list({ prefix: "d1/" });
+  for (const obj of list.objects) {
+    const d = obj.key.slice(3, 13);
+    if (d < cutoff) await env.BACKUP.delete(obj.key).catch(() => {});
+  }
+  await transition(env, "backup", "d1", null, "exported", `d1/${day}.json`);
+}
+
+/** L3: superseded keys stay 30 days for audit, then prune. */
+export async function pruneSupersededKeys(env: Env): Promise<void> {
+  await env.DB.prepare(`DELETE FROM keys WHERE superseded_at IS NOT NULL AND superseded_at < ?`)
+    .bind(nowS() - 30 * 86_400)
+    .run();
+}
+
 export async function runCron(env: Env, cron: string): Promise<void> {
   if (cron === "10 5 * * *") {
     await creditBurn(env);
+    await backupExport(env).catch((e) => console.error("BACKUP_FAILED", { error: String(e) }));
+    await pruneSupersededKeys(env);
   }
   await sweepExpired(env);
   await nonceGc(env);

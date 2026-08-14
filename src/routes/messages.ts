@@ -148,7 +148,13 @@ messages.post("/:address/messages", async (c) => {
   //  - upload: dedup ONLY by explicit idempotency_key (unique-index-backed,
   //    per-address). No key => always a fresh row; no size-only collision, no
   //    reissued PUT url to a non-originator.
-  const bodyHash = bytes ? await sha256Hex(bytes) : `upload-nohash-${crypto.randomUUID()}`;
+  // M9: content-hash dedup runs PRE-payment (that ordering is deliberate — no
+  // charge for a retry), which made it a free existence oracle: replay a
+  // guessed body, read idempotent_replay, learn the message exists. Scoping
+  // the hash by sender IP keeps the retry case (same connection origin) while
+  // a probing stranger just creates — and pays for — a fresh row.
+  const rip = c.req.header("cf-connecting-ip") ?? "?";
+  const bodyHash = bytes ? await sha256Hex(`${rip}:${await sha256Hex(bytes)}`) : `upload-nohash-${crypto.randomUUID()}`;
   const dayAgo = nowS() - 86_400;
   const canDedup = Boolean(p.idempotency_key) || Boolean(bytes);
   const existing = canDedup

@@ -1,12 +1,19 @@
 /**
- * §5 require_e2e gate. Structural enforcement, not cryptographic proof — the
- * honest limit is documented: we cannot prove ciphertext targets the
- * registered key. What we CAN guarantee: nothing that passes this gate is
- * readable by us or a subpoena.
+ * §5 require_e2e gate — an honest HEURISTIC, not a proof (F3/M10). What it
+ * actually does: reject everything RECOGNIZABLE as plaintext (JSON/XML sniff,
+ * file magics INCLUDING compression containers, printable runs, low entropy).
+ * What it cannot do: distinguish real sealed-box ciphertext from any other
+ * high-entropy bytes, or prove ciphertext targets the registered key. A sender
+ * determined to store junk that looks like ciphertext can. The guarantee worth
+ * stating is the operator-side one: nothing that passes this gate is readable
+ * by us or by a subpoena of us.
  *
  *   1. length >= 48 and consistent with sealed-box framing (32B epk ‖ box)
- *   2. Shannon entropy >= 7.5 bits/byte, no plaintext signatures
+ *   2. Shannon entropy near the size-adjusted ceiling, no plaintext signatures
  *   3. sender declared encrypted: true (checked by caller)
+ *
+ * Compressed data (gzip/zstd/xz/…) has HIGH entropy and would sail past the
+ * entropy test — the container magics below are what catch it.
  */
 
 /**
@@ -55,6 +62,13 @@ export function looksLikePlaintext(bytes: Uint8Array): string | null {
     [[0x25, 0x50, 0x44, 0x46], "pdf"],
     [[0x50, 0x4b, 0x03, 0x04], "zip"],
     [[0x47, 0x49, 0x46, 0x38], "gif"],
+    // Compression containers: high-entropy payloads the entropy test alone
+    // would pass — but their headers name them (M10).
+    [[0x1f, 0x8b], "gzip"],
+    [[0x28, 0xb5, 0x2f, 0xfd], "zstd"],
+    [[0xfd, 0x37, 0x7a, 0x58, 0x5a], "xz"],
+    [[0x42, 0x5a, 0x68], "bzip2"],
+    [[0x37, 0x7a, 0xbc, 0xaf], "7z"],
   ];
   for (const [magic, name] of magics)
     if (magic.every((m, i) => bytes[i] === m)) return `magic_${name}`;

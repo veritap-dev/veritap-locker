@@ -25,6 +25,10 @@ crons = ["*/15 * * * *", "10 5 * * *"]   # sweep · daily credit burn
 
 [vars]
 LOCKER_ENABLED = "true"
+# #773-C1: "on" = normal; "off" = wind-down read-only (writes 503, reads/acks up).
+LOCKER_WRITES = "on"
+# #773-A1: spend breaker daily ceiling (USD). Worst possible day ~= this number.
+DAILY_COST_BUDGET_USD = "50"
 PUBLIC_BASE_URL = "https://locker.veritap.dev"
 # Phase B: x402 live on Base Sepolia (hosted keyless facilitator). Mainnet
 # flip = X402_NETWORK "base" + CDP-authed facilitator URL — config, not code.
@@ -37,3 +41,8 @@ X402_ENABLED = "true"
 X402_NETWORK = "base"
 RECEIVING_ADDRESS = "0x5c7872C6aA7Da867F52733Cebf469f4b9A113f2B"
 # Secrets: NONCE_HMAC_KEY, CDP_API_KEY_ID, CDP_API_KEY_SECRET (wrangler secret put).
+
+# #773-B2: nightly D1 export target — separate bucket, 30-day rotation.
+[[r2_buckets]]
+binding = "BACKUP"
+bucket_name = "veritap-locker-backup"

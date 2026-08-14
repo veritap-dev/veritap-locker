@@ -89,6 +89,18 @@ describe("require_e2e gate (§12.6a)", () => {
   it("rejects short bodies", () => {
     expect(e2eGate(crypto.getRandomValues(new Uint8Array(16))).pass).toBe(false);
   });
+  it("rejects compressed containers despite their high entropy (M10)", () => {
+    // gzip header on an otherwise random (high-entropy) body — the entropy
+    // test alone would pass this; the magic check must not.
+    const gz = crypto.getRandomValues(new Uint8Array(256));
+    gz[0] = 0x1f; gz[1] = 0x8b; gz[2] = 0x08;
+    const g = e2eGate(gz);
+    expect(g.pass).toBe(false);
+    expect(g.reason).toContain("gzip");
+    const zstd = crypto.getRandomValues(new Uint8Array(256));
+    zstd.set([0x28, 0xb5, 0x2f, 0xfd], 0);
+    expect(e2eGate(zstd).pass).toBe(false);
+  });
   it("accepts random high-entropy bytes (documented limit)", () => {
     expect(e2eGate(crypto.getRandomValues(new Uint8Array(256))).pass).toBe(true);
   });

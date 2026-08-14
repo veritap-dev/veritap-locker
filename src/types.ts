@@ -1,7 +1,15 @@
 export interface Env {
   DB: D1Database;
   BODIES: R2Bucket;
+  /** #773-B2: nightly D1 export bucket. Optional so local dev runs without it. */
+  BACKUP?: R2Bucket;
   LOCKER_ENABLED?: string;
+  /** #773-C1: "off" = wind-down read-only mode — writes 503, reads/acks served. */
+  LOCKER_WRITES?: string;
+  /** #773-A1: daily spend ceiling in USD (default 50). */
+  DAILY_COST_BUDGET_USD?: string;
+  /** #773-B4: "true" bypasses the mass-delete tripwire for one operator-approved sweep. */
+  TRIPWIRE_OVERRIDE?: string;
   PUBLIC_BASE_URL: string;
   NONCE_HMAC_KEY?: string;
   /** Phase B: x402 receiving address (address only — key never touches the server). */

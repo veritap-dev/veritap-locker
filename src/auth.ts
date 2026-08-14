@@ -121,10 +121,13 @@ export async function verifySigned(
 }
 
 export async function bumpCounter(env: Env, bucket: string, nowS: number): Promise<number> {
-  // Hour-window counters for §8 limits; sigfail uses a rolling 15-min-ish window.
+  // Hour-window counters for §8 limits; sigfail uses a rolling 15-min-ish
+  // window; the spend breaker (#773-A1) counts whole UTC days.
   const window = bucket.startsWith("sigfail:")
     ? nowS - (nowS % LIMITS.sig_fail_cooldown_seconds)
-    : nowS - (nowS % 3600);
+    : bucket.startsWith("spendday:")
+      ? nowS - (nowS % 86_400)
+      : nowS - (nowS % 3600);
   const r = await env.DB.prepare(
     `INSERT INTO rate_counters (bucket, window_start, n) VALUES (?,?,1)
      ON CONFLICT(bucket, window_start) DO UPDATE SET n = n + 1
