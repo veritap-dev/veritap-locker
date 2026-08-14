@@ -27,7 +27,7 @@ export async function setup() {
   proc = spawn(
     "npx",
     ["wrangler", "dev", "--port", String(PORT), "--persist-to", STATE, "--test-scheduled",
-     "--var", "NONCE_HMAC_KEY:test-hmac-key", "--var", `PUBLIC_BASE_URL:http://localhost:${PORT}`,
+     "--var", "NONCE_HMAC_KEY:test-hmac-key-0123456789abcdef", "--var", `PUBLIC_BASE_URL:http://localhost:${PORT}`,
      "--var", "X402_ENABLED:false"],
     { stdio: "ignore", detached: false },
   );
@@ -38,7 +38,7 @@ export async function setup() {
   payProc = spawn(
     "npx",
     ["wrangler", "dev", "--port", String(PAY_PORT), "--persist-to", PAY_STATE,
-     "--var", "NONCE_HMAC_KEY:test-hmac-key", "--var", `PUBLIC_BASE_URL:http://localhost:${PAY_PORT}`,
+     "--var", "NONCE_HMAC_KEY:test-hmac-key-0123456789abcdef", "--var", `PUBLIC_BASE_URL:http://localhost:${PAY_PORT}`,
      "--var", "X402_ENABLED:true", "--var", "X402_NETWORK:base-sepolia",
      "--var", "RECEIVING_ADDRESS:0x5c7872C6aA7Da867F52733Cebf469f4b9A113f2B",
      "--var", "FACILITATOR_URL:http://localhost:19999"],

@@ -107,15 +107,19 @@ messages.post("/:address/messages", async (c) => {
       return err("E2E_REQUIRED", "This mailbox only accepts sealed-box ciphertext (declare encrypted: true).", 400, {
         directory: `${c.env.PUBLIC_BASE_URL}/v1/directory/${address}`,
       });
-    if (bytes) {
-      const gate = e2eGate(bytes);
-      if (!gate.pass)
-        return err("E2E_REQUIRED", `Body rejected by ciphertext gate: ${gate.reason}`, 400, {
-          directory: `${c.env.PUBLIC_BASE_URL}/v1/directory/${address}`,
-        });
-    }
-    // Upload path: gate re-checked at read time is not possible (we never read
-    // R2 bodies) — the honest structural limit; documented.
+    // HIGH-2: the ciphertext gate can only inspect inline bytes; we never read
+    // R2 bodies, so the upload path would be an unchecked plaintext hole in a
+    // "provably unreadable" mailbox. Reject it. Sealed receipts/attestations
+    // are <=32KB and go inline anyway.
+    if (!bytes)
+      return err("E2E_REQUIRED", "This mailbox requires sealed ciphertext, which must be sent inline (<=32KB) so it can be verified — the upload path is not available for require_e2e mailboxes.", 400, {
+        directory: `${c.env.PUBLIC_BASE_URL}/v1/directory/${address}`,
+      });
+    const gate = e2eGate(bytes);
+    if (!gate.pass)
+      return err("E2E_REQUIRED", `Body rejected by ciphertext gate: ${gate.reason}`, 400, {
+        directory: `${c.env.PUBLIC_BASE_URL}/v1/directory/${address}`,
+      });
   }
 
   // #767.1 receipt-vault: flat price, hard size cap, fixed 1-year retention.
@@ -136,23 +140,35 @@ messages.post("/:address/messages", async (c) => {
   const priceMicro = quote.priceMicrousd;
   // Phase A: x402 middleware stubbed to pass-through; price recorded as owed.
 
-  const bodyHash = bytes ? await sha256Hex(bytes) : await sha256Hex(`upload:${address}:${size}:${p.idempotency_key ?? ""}`);
-
-  // §3 idempotency: same key, or same body-hash within 24h → same message, no double charge.
+  // HIGH-1: for UPLOADS the body isn't in hand yet, so a content hash is
+  // impossible pre-upload. The old synthetic hash keyed only on (address,size)
+  // let an unauthenticated stranger collide with a victim's pending upload,
+  // receive the victim's PUT url for free, and overwrite the body. So:
+  //  - inline: dedup by real content hash OR explicit key (both safe).
+  //  - upload: dedup ONLY by explicit idempotency_key (unique-index-backed,
+  //    per-address). No key => always a fresh row; no size-only collision, no
+  //    reissued PUT url to a non-originator.
+  const bodyHash = bytes ? await sha256Hex(bytes) : `upload-nohash-${crypto.randomUUID()}`;
   const dayAgo = nowS() - 86_400;
-  const existing = await c.env.DB.prepare(
-    p.idempotency_key
-      ? `SELECT message_id, expires_at, r2_key FROM messages WHERE address=?1 AND idempotency_key=?2 LIMIT 1`
-      : `SELECT message_id, expires_at, r2_key FROM messages WHERE address=?1 AND body_hash=?2 AND created_at>?3 LIMIT 1`,
-  )
-    .bind(...(p.idempotency_key ? [address, p.idempotency_key] : [address, bodyHash, dayAgo]))
-    .first<{ message_id: string; expires_at: number; r2_key: string | null }>();
+  const canDedup = Boolean(p.idempotency_key) || Boolean(bytes);
+  const existing = canDedup
+    ? await c.env.DB.prepare(
+        p.idempotency_key
+          ? `SELECT message_id, expires_at, r2_key, size FROM messages WHERE address=?1 AND idempotency_key=?2 LIMIT 1`
+          : `SELECT message_id, expires_at, r2_key, size FROM messages WHERE address=?1 AND body_hash=?2 AND created_at>?3 LIMIT 1`,
+      )
+        .bind(...(p.idempotency_key ? [address, p.idempotency_key] : [address, bodyHash, dayAgo]))
+        .first<{ message_id: string; expires_at: number; r2_key: string | null; size: number }>()
+    : null;
   if (existing) {
     return c.json(
       {
         message_id: existing.message_id,
         expires_at: new Date(existing.expires_at * 1000).toISOString(),
-        ...(existing.r2_key && !bytes
+        // Only reissue an upload URL when the replay carries the SAME idempotency
+        // key AND the same declared size — i.e. the genuine originator retrying,
+        // not a size-collision from a stranger.
+        ...(existing.r2_key && !bytes && p.idempotency_key && existing.size === size
           ? { upload_url: await signedPutUrl(c.env, existing.r2_key, size) }
           : {}),
         idempotent_replay: true,
@@ -178,6 +194,11 @@ messages.post("/:address/messages", async (c) => {
   const expires = created + ttlDays * 86_400;
   const r2key = bytes ? null : `msg/${address}/${id}`;
 
+  // M1: settlement already happened inside the gate. If the INSERT below
+  // throws (or the isolate is evicted mid-write), the buyer paid with no
+  // message — surface it LOUD with the settlement so it can be reconciled,
+  // rather than a silent generic 500.
+  try {
   if (bytes && r2key === null) {
     await c.env.DB.prepare(
       `INSERT INTO messages (message_id, address, producer, tag, content_type, size, inline_body, r2_key,
@@ -203,6 +224,12 @@ messages.post("/:address/messages", async (c) => {
       .run();
   }
   await transition(c.env, "message", id, null, "stored", `${size}b ttl${ttlDays}d $${priceMicro / 1e6}`);
+  } catch (insertErr) {
+    console.error("PAYMENT_ORPHAN", { message_id: id, address, paidMicrousd: priceMicro, settlement: gate.settlement, error: String(insertErr) });
+    await transition(c.env, "payment", `send:${address}`, "settled", "orphaned",
+      `paid ${priceMicro}µ$ but message ${id} INSERT failed — reconcile/refund`).catch(() => {});
+    return err("VALIDATION_ERROR", "Payment settled but message storage failed; this will be reconciled. Do not resend.", 500);
+  }
 
   return c.json(
     {
@@ -218,7 +245,10 @@ messages.post("/:address/messages", async (c) => {
 messages.post("/:address/read", async (c) => {
   const address = canonicalAddress(c.req.param("address"));
   if (!address) return err("VALIDATION_ERROR", "Invalid address.", 400);
-  if (await rateLimited(c.env, `read:${address}`, LIMITS.rate_read_hr))
+  // M4: key on (address, ip) — the old address-only bucket let an unauthenticated
+  // stranger burn a victim's 600/hr budget and 429 the real owner.
+  const rip = c.req.header("cf-connecting-ip") ?? "?";
+  if (await rateLimited(c.env, `read:${address}:${rip}`, LIMITS.rate_read_hr))
     return err("RATE_LIMITED", "Read limit reached.", 429);
 
   const body = (await c.req.json().catch(() => null)) as {
@@ -229,7 +259,7 @@ messages.post("/:address/read", async (c) => {
   const auth = await verifySigned(c.env, address, body.nonce, body.signature);
   if (!auth.ok) return err(auth.code, auth.message, auth.code === "RATE_LIMITED" ? 429 : 401);
 
-  const limit = Math.min(body.limit ?? 50, LIMITS.read_page_max);
+  const limit = Math.max(1, Math.min(Number(body.limit) || 50, LIMITS.read_page_max));
   // Keyset pagination on (created_at, message_id): timestamps are seconds, so
   // a burst lands many messages in one second — a created_at-only cursor
   // stalls after the first page (caught by §12.13).
@@ -320,11 +350,13 @@ messages.get("/:address/count", async (c) => {
   )
     .bind(address)
     .first<{ private_count: number }>();
-  if (priv?.private_count) return c.json({ unacked: 0 });
+  // M8: run the count either way so a private mailbox is timing-indistinguishable
+  // from a never-used address (which also runs it). Discard when private.
   const row = await c.env.DB.prepare(
     `SELECT count(*) AS n FROM messages WHERE address=? AND acked_at IS NULL AND expires_at>?`,
   )
     .bind(address, nowS())
     .first<{ n: number }>();
+  if (priv?.private_count) return c.json({ unacked: 0 });
   return c.json({ unacked: row?.n ?? 0 });
 });

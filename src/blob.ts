@@ -12,6 +12,14 @@ import { err, LIMITS } from "./codes.ts";
 import type { Env } from "./types.ts";
 import { nowS } from "./types.ts";
 
+/** Constant-time hex-string equality — no early-exit timing oracle on our MAC. */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 export async function signedGetUrl(env: Env, r2key: string): Promise<string> {
   const exp = nowS() + LIMITS.signed_url_seconds;
   const sig = await hmacHex(env, `blob:${r2key}:${exp}`);
@@ -26,7 +34,7 @@ export async function signedPutUrl(env: Env, r2key: string, size: number): Promi
 
 export async function serveBlob(env: Env, r2key: string, exp: string | null, sig: string | null): Promise<Response> {
   if (!exp || !sig || Number(exp) < nowS()) return err("NOT_FOUND", "Link expired or invalid.", 404);
-  if ((await hmacHex(env, `blob:${r2key}:${exp}`)) !== sig)
+  if (!timingSafeEqual(await hmacHex(env, `blob:${r2key}:${exp}`), sig))
     return err("NOT_FOUND", "Link expired or invalid.", 404);
   const obj = await env.BODIES.get(r2key);
   if (!obj)
@@ -50,7 +58,7 @@ export async function acceptUpload(
 ): Promise<Response> {
   if (!exp || !sig || !size || Number(exp) < nowS())
     return err("NOT_FOUND", "Upload link expired or invalid.", 404);
-  if ((await hmacHex(env, `upload:${r2key}:${size}:${exp}`)) !== sig)
+  if (!timingSafeEqual(await hmacHex(env, `upload:${r2key}:${size}:${exp}`), sig))
     return err("NOT_FOUND", "Upload link expired or invalid.", 404);
   if (!body) return err("VALIDATION_ERROR", "Empty body.", 400);
   const bytes = new Uint8Array(await new Response(body).arrayBuffer());

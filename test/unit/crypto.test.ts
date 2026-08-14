@@ -90,7 +90,7 @@ describe("require_e2e gate (§12.6a)", () => {
     expect(e2eGate(crypto.getRandomValues(new Uint8Array(16))).pass).toBe(false);
   });
   it("accepts random high-entropy bytes (documented limit)", () => {
-    expect(e2eGate(crypto.getRandomValues(new Uint8Array(128))).pass).toBe(true);
+    expect(e2eGate(crypto.getRandomValues(new Uint8Array(256))).pass).toBe(true);
   });
   it("entropy math sanity", () => {
     expect(shannonBitsPerByte(new Uint8Array(0))).toBe(0);

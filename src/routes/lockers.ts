@@ -174,8 +174,19 @@ lockers.post("/:address/credit", async (c) => {
   if (!address) return err("VALIDATION_ERROR", "Invalid address.", 400);
   const body = (await c.req.json().catch(() => null)) as { amount_microusd?: number } | null;
   const amount = body?.amount_microusd ?? 0;
+  // L2: must be a positive integer (microusd == atomic USDC units). A fractional
+  // value would otherwise reach BigInt() in the gate and throw a raw 500.
+  if (!Number.isInteger(amount) || amount <= 0)
+    return err("VALIDATION_ERROR", "amount_microusd must be a positive integer.", 400);
   if (amount < PRICE.credit_min_topup_microusd)
     return err("VALIDATION_ERROR", `Minimum top-up is ${PRICE.credit_min_topup_microusd} microusd ($1).`, 400);
+  // M3: enforce the $100 cap BEFORE settling — the old order charged on-chain
+  // then returned 400, delivering nothing for the money.
+  const cur = await c.env.DB.prepare(`SELECT balance_microusd FROM credits WHERE address=?`)
+    .bind(address)
+    .first<{ balance_microusd: number }>();
+  if ((cur?.balance_microusd ?? 0) + amount > PRICE.credit_cap_microusd)
+    return err("VALIDATION_ERROR", "Credit cap is $100 per address.", 400);
   const gate = await paymentGate(
     c.env,
     c.req.raw,
@@ -185,11 +196,6 @@ lockers.post("/:address/credit", async (c) => {
     `credit:${address}`,
   );
   if (!gate.ok) return gate.response!;
-  const cur = await c.env.DB.prepare(`SELECT balance_microusd FROM credits WHERE address=?`)
-    .bind(address)
-    .first<{ balance_microusd: number }>();
-  if ((cur?.balance_microusd ?? 0) + amount > PRICE.credit_cap_microusd)
-    return err("VALIDATION_ERROR", "Credit cap is $100 per address.", 400);
   await c.env.DB.prepare(
     `INSERT INTO credits (address, balance_microusd, grace_started_at, updated_at) VALUES (?1,?2,NULL,?3)
      ON CONFLICT(address) DO UPDATE SET balance_microusd = balance_microusd + ?2, grace_started_at = NULL, updated_at = ?3`,

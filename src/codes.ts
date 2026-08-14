@@ -9,7 +9,7 @@ export const CODES = [
   "MAILBOX_FULL",
   "PAYLOAD_TOO_LARGE",
   "SLOT_LIMIT",
-  "INSUFFICIENT_CREDIT",
+  "INSUFFICIENT_CREDIT", // reserved: exhaustion currently surfaces as GRACE_READONLY
   "GRACE_READONLY",
   "RATE_LIMITED",
   "LOCKER_DISABLED",

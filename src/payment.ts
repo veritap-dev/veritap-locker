@@ -106,7 +106,10 @@ export function respond402(req: PaymentRequirements, error?: string): Response {
       x402Version: 1,
       error:
         error ??
-        "Payment required. Durable delivery to a wallet-addressed mailbox; the recipient signs with their x402 key to read. $0.01 insures the result you already paid for.",
+        // F1/F2/F3: no hardcoded price (the quote is in accepts[].maxAmountRequired),
+        // and reading is FREE + gated by the wallet key, not payment. Copy must
+        // not imply pay-to-read or a fixed price the tiers don't honor.
+        `Payment required to deliver this message to the wallet-addressed mailbox. Durable storage insures a result whose sender may be gone when you wake; the holder of the wallet key reads it for free by signing. Amount: see accepts[].maxAmountRequired.`,
       accepts: [req],
     }),
     { status: 402, headers: { "Content-Type": "application/json" } },
@@ -213,29 +216,50 @@ export async function paymentGate(
     };
   };
 
+  // H5: fail CLOSED on ambiguity. Require EXPLICIT positive results, not merely
+  // "not false" — a 200 with an empty/garbled body ({} from the .catch) must
+  // never be read as success (that was a free-message hole).
   try {
     const verify = await call("verify");
-    if (verify.status !== 200 || verify.body.isValid === false)
-      console.warn("VERIFY_REJECTED", { status: verify.status, body: JSON.stringify(verify.body).slice(0, 400) });
-    if (!(verify.status === 200 && verify.body.isValid !== false && verify.body.errorReason === undefined))
+    if (!(verify.status === 200 && verify.body.isValid === true)) {
+      console.warn("VERIFY_REJECTED", { status: verify.status, reason: verify.body.invalidReason ?? verify.body.errorReason });
+      // Verify-phase failure is safe to call not-charged: nothing settled.
       return {
         ok: false,
-        response: respond402(req, `Payment verification failed: ${verify.body.invalidReason ?? verify.body.errorReason ?? "rejected"}`),
+        response: respond402(req, `Payment verification failed: ${verify.body.invalidReason ?? verify.body.errorReason ?? "rejected"}. Not charged.`),
       };
+    }
 
-    const settle = await call("settle");
-    const settled = settle.status === 200 && settle.body.success !== false && !settle.body.errorReason;
-    if (!settled)
+    let settle;
+    try {
+      settle = await call("settle");
+    } catch (settleErr) {
+      // H4: a settle-phase timeout/exception is AMBIGUOUS — the tx may have
+      // broadcast and settled on-chain. Do NOT claim "not charged". Log for
+      // reconciliation; the consumed authorization means a same-payload retry
+      // will (correctly) fail, so the caller must not blindly re-send.
+      console.error("SETTLE_AMBIGUOUS", { payer: auth.from, nonce: auth.nonce, error: String(settleErr) });
+      await transition(env, "payment", entityForAudit, null, "settle_ambiguous",
+        `${priceMicrousd}µ$ from ${auth.from} nonce ${auth.nonce} — settle unacknowledged, reconcile on-chain`);
       return {
         ok: false,
-        response: respond402(req, `Payment settlement failed: ${settle.body.errorReason ?? "not settled"} — a replayed authorization cannot settle twice.`),
+        response: respond402(req, "Payment settlement could not be confirmed. Your authorization may have settled on-chain — do NOT resend the same payment; if a message was not created it will be reconciled or refunded. This request is idempotent on the payment nonce."),
       };
+    }
+    const settled = settle.status === 200 && settle.body.success === true && Boolean(settle.body.transaction);
+    if (!settled) {
+      console.warn("SETTLE_REJECTED", { status: settle.status, reason: settle.body.errorReason });
+      return {
+        ok: false,
+        response: respond402(req, `Payment settlement failed: ${settle.body.errorReason ?? "not settled"}. A replayed authorization cannot settle twice.`),
+      };
+    }
 
     await transition(env, "payment", entityForAudit, null, "settled",
-      `${priceMicrousd}µ$ from ${auth.from} tx ${settle.body.transaction ?? "?"}`);
+      `${priceMicrousd}µ$ from ${auth.from} tx ${settle.body.transaction}`);
     return { ok: true, settlement: { txHash: settle.body.transaction, payer: auth.from } };
   } catch (e) {
-    // Facilitator unreachable: fail closed, tell the truth.
+    // Verify-phase network failure: nothing settled, safe to call not-charged.
     console.error("FACILITATOR_ERROR", { error: String(e) });
     return { ok: false, response: respond402(req, "Payment facilitator unreachable; retry shortly. Not charged.") };
   }

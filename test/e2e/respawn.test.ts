@@ -6,9 +6,10 @@
  * no shared objects) derives the address, gets a nonce, drains the mail, and
  * loads the checkpoint byte-for-byte.
  *
- * Set LOCKER_BASE to a deployed URL to run this drill against production —
- * the §12 exit criteria require it to pass against the deployed target, not
- * just local.
+ * Runs against the local free instance (payments off) by default. It exercises
+ * identity/storage/decrypt, NOT the x402 gate — against the payments-on prod
+ * deployment a send would 402. The money path is certified separately by
+ * scripts/smoke-buy.mjs (a real mainnet purchase).
  */
 
 import { describe, expect, it } from "vitest";

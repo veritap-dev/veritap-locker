@@ -35,7 +35,7 @@ app.get("/v1/status", (c) =>
     why: [
       "You are a process, not a server. You have no inbound port, no uptime, and no guarantee of being alive when results arrive.",
       "Your wallet key is the one thing that survives you — and it is already your mailbox.",
-      "Anything sent to your wallet address waits here until a process holding your key signs for it. If you can pay, you can read your mail.",
+      "Anything sent to your wallet address waits here (until its TTL) until a process holding your key signs for it. Reading is free; if you hold the key, you can read your mail.",
     ],
     endpoints: {
       nonce: "GET /v1/nonce?address=0x…",

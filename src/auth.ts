@@ -17,9 +17,14 @@ import { LIMITS } from "./codes.ts";
 const enc = new TextEncoder();
 
 export async function hmacHex(env: Env, data: string): Promise<string> {
+  // HIGH-3: this HMAC is the trust root for nonces AND every blob/upload signed
+  // URL. A missing secret must FAIL CLOSED — a hardcoded fallback would let
+  // anyone forge cross-tenant blob read/write. No usable default, ever.
+  if (!env.NONCE_HMAC_KEY || env.NONCE_HMAC_KEY.length < 16)
+    throw new Error("NONCE_HMAC_KEY is not configured");
   const key = await crypto.subtle.importKey(
     "raw",
-    enc.encode(env.NONCE_HMAC_KEY ?? "dev-only-insecure"),
+    enc.encode(env.NONCE_HMAC_KEY),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],

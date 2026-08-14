@@ -1,6 +1,7 @@
 /**
- * §7 scheduled sweeps — all idempotent and safe to double-run (§12.26):
- * TTL expiry, daily credit burn + grace transitions, nonce GC, R2 orphan GC.
+ * §7 scheduled sweeps — idempotent and safe to double-run (§12.26): TTL expiry,
+ * daily credit burn (guarded once-per-UTC-day, M2), grace transitions, nonce
+ * GC, R2 orphan GC (cursor-rotated, M5).
  */
 
 import { err as _err, LIMITS, PRICE } from "./codes.ts";
@@ -46,6 +47,15 @@ export async function creditBurn(env: Env): Promise<void> {
     const balance = cur?.balance_microusd ?? 0;
 
     if (balance >= burn) {
+      // M2: cron is at-least-once. Guard the decrement with a once-per-UTC-day
+      // marker so a retried/overlapping run is a no-op, not a double debit.
+      const day = new Date(t * 1000).toISOString().slice(0, 10);
+      const already = await env.DB.prepare(
+        `SELECT 1 AS x FROM credit_events WHERE address=? AND kind='burn' AND note LIKE ?||'%' LIMIT 1`,
+      )
+        .bind(r.address, `day:${day}`)
+        .first();
+      if (already) continue;
       await env.DB.prepare(
         `UPDATE credits SET balance_microusd = balance_microusd - ?, grace_started_at = NULL, updated_at=? WHERE address=?`,
       )
@@ -54,7 +64,7 @@ export async function creditBurn(env: Env): Promise<void> {
       await env.DB.prepare(
         `INSERT INTO credit_events (address, kind, amount_microusd, at, note) VALUES (?, 'burn', ?, ?, ?)`,
       )
-        .bind(r.address, burn, t, `${r.bytes} bytes`)
+        .bind(r.address, burn, t, `day:${day} ${r.bytes} bytes`)
         .run();
       continue;
     }
@@ -88,9 +98,13 @@ export async function creditBurn(env: Env): Promise<void> {
   }
 }
 
-/** R2 orphan GC: bodies whose D1 rows are gone (bounded scan). */
+/** R2 orphan GC: bodies whose D1 rows are gone. M5: rotate a persisted cursor
+ * across runs so the scan window advances past the first 100 keys at scale. */
 export async function orphanGc(env: Env): Promise<void> {
-  const list = await env.BODIES.list({ limit: 100 });
+  const cur = await env.DB.prepare(`SELECT bucket FROM rate_counters WHERE bucket LIKE 'orphangc:%' LIMIT 1`)
+    .first<{ bucket: string }>();
+  const cursor = cur?.bucket?.slice("orphangc:".length) || undefined;
+  const list = await env.BODIES.list({ limit: 100, cursor });
   for (const obj of list.objects) {
     const isMsg = obj.key.startsWith("msg/");
     const row = isMsg
@@ -101,6 +115,13 @@ export async function orphanGc(env: Env): Promise<void> {
       await env.BODIES.delete(obj.key).catch(() => {});
     }
   }
+  // Advance (or reset) the cursor for the next run.
+  await env.DB.prepare(`DELETE FROM rate_counters WHERE bucket LIKE 'orphangc:%'`).run();
+  const next = list.truncated ? (list as { cursor?: string }).cursor : undefined;
+  if (next)
+    await env.DB.prepare(`INSERT INTO rate_counters (bucket, window_start, n) VALUES (?, 0, 0)`)
+      .bind(`orphangc:${next}`)
+      .run();
 }
 
 export async function runCron(env: Env, cron: string): Promise<void> {

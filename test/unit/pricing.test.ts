@@ -63,4 +63,15 @@ describe("pricing margin invariant (#768)", () => {
     const price = priceForMessage(size, ttl) * (1 - 0.2);
     expect(price).toBeGreaterThanOrEqual(MIN_MARGIN * costFloorMicrousd(size, ttl, "message"));
   });
+
+  it("guardQuote CLAMPS UP a below-floor quote, never returns underwater (#768 behavioral)", async () => {
+    const { guardQuote } = await import("../../src/cost.ts");
+    const env = { DB: { prepare: () => ({ bind: () => ({ run: async () => {}, first: async () => null }) }) } } as unknown as import("../../src/types.ts").Env;
+    const floor = MIN_MARGIN * costFloorMicrousd(1000, 30, "message");
+    const res = await guardQuote(env, Math.floor(floor / 2), 1000, 30, "message", "t");
+    expect(res.clamped).toBe(true);
+    expect(res.priceMicrousd).toBeGreaterThanOrEqual(floor);
+    const ok = await guardQuote(env, floor * 10, 1000, 30, "message", "t");
+    expect(ok.clamped).toBe(false);
+  });
 });
