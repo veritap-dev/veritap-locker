@@ -142,11 +142,23 @@ export async function paymentGate(
       response: respond402(req, "Payment payload does not satisfy the requirements (network, recipient, or amount)."),
     };
 
-  const facilitator = env.FACILITATOR_URL ?? "https://x402.org/facilitator";
+  // Mainnet uses the CDP facilitator with per-request JWT auth from the CDP
+  // secret; testnet uses the hosted keyless facilitator. Both are config.
+  const mainnet = req.network === "base";
+  const facilitator =
+    env.FACILITATOR_URL ??
+    (mainnet ? "https://api.cdp.coinbase.com/platform/v2/x402" : "https://x402.org/facilitator");
   const call = async (path: "verify" | "settle") => {
+    let auth: Record<string, string> = {};
+    if (mainnet && env.CDP_API_KEY_ID && env.CDP_API_KEY_SECRET) {
+      const { createCdpAuthHeaders } = await import("@coinbase/x402");
+      const headersFn = createCdpAuthHeaders(env.CDP_API_KEY_ID, env.CDP_API_KEY_SECRET);
+      const headers = headersFn ? await headersFn() : {};
+      auth = (path === "verify" ? headers.verify : headers.settle) ?? {};
+    }
     const res = await fetch(`${facilitator}/${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...auth },
       body: JSON.stringify({ x402Version: 1, paymentPayload: payload, paymentRequirements: req }),
       signal: AbortSignal.timeout(20_000),
     });

@@ -31,7 +31,9 @@ PUBLIC_BASE_URL = "https://locker.veritap.dev"
 # The address is checksummed and is the ONLY payment credential deployed;
 # the wallet key lives in the operator's Base app, never here.
 X402_ENABLED = "true"
-X402_NETWORK = "base-sepolia"
-FACILITATOR_URL = "https://x402.org/facilitator"
+# MAINNET: CDP facilitator (JWT from CDP secrets) is the default for "base" —
+# no FACILITATOR_URL override needed. Bazaar flag stays OFF until the $5
+# smoke purchase clears (spec §13 Phase B ordering).
+X402_NETWORK = "base"
 RECEIVING_ADDRESS = "0x5c7872C6aA7Da867F52733Cebf469f4b9A113f2B"
 # Secrets: NONCE_HMAC_KEY, CDP_API_KEY_ID, CDP_API_KEY_SECRET (wrangler secret put).
