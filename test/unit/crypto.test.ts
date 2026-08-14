@@ -43,6 +43,34 @@ describe("sealed box (§12.5)", () => {
   });
 });
 
+describe("sealed box is sender-blind (#771)", () => {
+  it("after send, the SENDER cannot decrypt its own ciphertext", () => {
+    const recipient = nacl.box.keyPair();
+    const senderKeys = nacl.box.keyPair(); // sender's own keypair
+    const msg = new TextEncoder().encode("only the recipient may read this");
+    const sealed = sealedBoxSeal(msg, recipient.publicKey);
+    // Recipient opens it:
+    expect(sealedBoxOpen(sealed, recipient.publicKey, recipient.secretKey)).not.toBeNull();
+    // Sender, holding its OWN keys, cannot — the ephemeral secret was discarded:
+    expect(sealedBoxOpen(sealed, senderKeys.publicKey, senderKeys.secretKey)).toBeNull();
+    // Even trying the recipient PUBLIC key with sender's secret fails:
+    expect(sealedBoxOpen(sealed, recipient.publicKey, senderKeys.secretKey)).toBeNull();
+  });
+
+  it("derived enc key is reproducible from the wallet signature (#771)", async () => {
+    const { deriveEncKeyPair } = await import("../../client/index.ts");
+    const { privateKeyToAccount } = await import("viem/accounts");
+    const acct = privateKeyToAccount("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d");
+    const sign = (m: string) => acct.signMessage({ message: m });
+    const kp1 = await deriveEncKeyPair(sign);
+    const kp2 = await deriveEncKeyPair(sign);
+    expect(Buffer.from(kp1.publicKey).equals(Buffer.from(kp2.publicKey))).toBe(true);
+    // Version separation: v2 derives a different key.
+    const kpV2 = await deriveEncKeyPair(sign, "v2");
+    expect(Buffer.from(kp1.publicKey).equals(Buffer.from(kpV2.publicKey))).toBe(false);
+  });
+});
+
 describe("require_e2e gate (§12.6a)", () => {
   it("accepts real sealed-box ciphertext", () => {
     const kp = nacl.box.keyPair();

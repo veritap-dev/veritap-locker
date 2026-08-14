@@ -52,6 +52,35 @@ export function sealedBoxOpen(sealed: Uint8Array, pk: Uint8Array, sk: Uint8Array
   return nacl.box.open(sealed.slice(32), nonce, epk, sk);
 }
 
+/** Current enc-key derivation version. Old messages stay openable with old
+ * versions; a rotation bumps this and re-registers. */
+export const ENC_KEY_VERSION = "v1" as const;
+
+/**
+ * #771 mandate — the enc keypair is DERIVED from the wallet, not a second
+ * secret. EIP-191 is deterministic (RFC 6979), so signing a fixed
+ * domain-separated statement is reproducible; HKDF-SHA256 over that signature
+ * yields the X25519 seed. A respawned agent holding ONLY its wallet key
+ * regenerates the same keypair — the one-secret property the whole thesis
+ * rests on. Agents with a non-deterministic signer must instead persist the
+ * seed (documented fallback, not built).
+ */
+export async function deriveEncKeyPair(
+  signMessage: (m: string) => Promise<`0x${string}`>,
+  version: string = ENC_KEY_VERSION,
+): Promise<nacl.BoxKeyPair> {
+  const statement = `veritap-locker:enc-key:${version}`;
+  const sig = await signMessage(statement);
+  const sigBytes = Uint8Array.from((sig.slice(2).match(/../g) ?? []).map((h) => parseInt(h, 16)));
+  const hk = await crypto.subtle.importKey("raw", sigBytes as BufferSource, "HKDF", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "HKDF", hash: "SHA-256", salt: new TextEncoder().encode(statement), info: new Uint8Array() },
+    hk,
+    256,
+  );
+  return nacl.box.keyPair.fromSecretKey(new Uint8Array(bits));
+}
+
 export class LockerClient {
   readonly baseUrl: string;
   readonly account: PrivateKeyAccount;
@@ -129,16 +158,20 @@ export class LockerClient {
     });
   }
 
-  /** Register an X25519 key; returns the nacl keypair to persist client-side. */
-  async registerKey(requireE2e: boolean, keyPair?: nacl.BoxKeyPair) {
-    const kp = keyPair ?? nacl.box.keyPair();
+  /**
+   * Register an X25519 key. By default DERIVES it from the wallet (#771), so
+   * a respawned agent regenerates the same key with no stored secret. Pass an
+   * explicit keyPair only for the non-deterministic-signer fallback.
+   */
+  async registerKey(requireE2e: boolean, keyPair?: nacl.BoxKeyPair, privateCount = false) {
+    const kp = keyPair ?? (await deriveEncKeyPair((m) => this.account.signMessage({ message: m })));
     const encPubkey = b64(kp.publicKey);
     const statement = `veritap-locker:register-key:${this.address}:${encPubkey}`;
     const keySig = await this.account.signMessage({ message: statement });
     const auth = await this.challenge();
     const res = await this.json(`/v1/mb/${this.address}/keys`, {
       method: "POST",
-      body: JSON.stringify({ ...auth, enc_pubkey: encPubkey, key_sig: keySig, require_e2e: requireE2e }),
+      body: JSON.stringify({ ...auth, enc_pubkey: encPubkey, key_sig: keySig, require_e2e: requireE2e, private_count: privateCount }),
     });
     return { ...res, keyPair: kp };
   }
@@ -169,6 +202,32 @@ export class LockerClient {
     const blob = await fetch(res.body.body_url);
     if (!blob.ok) return null;
     return new Uint8Array(await blob.arrayBuffer());
+  }
+
+  /**
+   * #771 — the respawn-proof read: derive the enc key from the wallet, confirm
+   * it matches the registered directory entry (else a clear error, not a
+   * silent decrypt failure), open every sealed body. Requires ONLY the wallet.
+   */
+  async readAndDecrypt(): Promise<Array<{ envelope: Envelope; plaintext: Uint8Array | null }>> {
+    const kp = await deriveEncKeyPair((m) => this.account.signMessage({ message: m }));
+    const derivedPub = b64(kp.publicKey);
+    const dir = await this.json<{ enc_pubkey?: string }>(`/v1/directory/${this.address}`);
+    if (dir.status === 200 && dir.body.enc_pubkey && dir.body.enc_pubkey !== derivedPub)
+      throw new Error(
+        `derived enc key (${derivedPub.slice(0, 12)}…) does not match the registered directory key ` +
+          `(${dir.body.enc_pubkey.slice(0, 12)}…) — this mailbox was registered with a different key ` +
+          `(non-deterministic signer? wrong version? persist the seed).`,
+      );
+    const read = await this.read();
+    const out = [];
+    for (const env of read.body.messages) {
+      const bytes = await this.fetchBody(env);
+      let plaintext: Uint8Array | null = bytes;
+      if (env.encrypted && bytes) plaintext = sealedBoxOpen(bytes, kp.publicKey, kp.secretKey);
+      out.push({ envelope: env, plaintext });
+    }
+    return out;
   }
 
   async fetchBody(env: Envelope): Promise<Uint8Array | null> {
