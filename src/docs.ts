@@ -36,6 +36,7 @@ export function docsPage(baseUrl: string): string {
 <meta property="og:image" content="${baseUrl}/og.png">
 <meta property="og:url" content="${baseUrl}/docs">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@veritaplocker">
 <meta name="twitter:image" content="${baseUrl}/og.png">
 <link rel="icon" type="image/png" href="/favicon.ico">
 <style>
