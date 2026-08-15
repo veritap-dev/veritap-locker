@@ -14,6 +14,11 @@ export interface Env {
   SELF_ADDRESSES?: string;
   /** #788: bearer for the read-only /admin panel (wrangler secret). */
   ADMIN_KEY?: string;
+  /** #804: OFAC screen cache (Chainalysis oracle results). Optional — screening
+   * still works uncached if absent (tests run without it). */
+  SANCTIONS?: KVNamespace;
+  /** #804: Base RPC for the sanctions oracle eth_call. Defaults to mainnet.base.org. */
+  BASE_RPC_URL?: string;
   PUBLIC_BASE_URL: string;
   NONCE_HMAC_KEY?: string;
   /** Phase B: x402 receiving address (address only — key never touches the server). */

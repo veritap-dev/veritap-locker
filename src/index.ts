@@ -12,6 +12,7 @@ import { err, LIMITS } from "./codes.ts";
 import { adminPanel } from "./admin.ts";
 import { FAVICON_32_B64, LOGO_512_B64, OG_B64 } from "./brand-assets.ts";
 import { docsPage } from "./docs.ts";
+import { abusePage, handleAbuseReport, privacyPage, termsPage } from "./legal.ts";
 import { landingPage } from "./landing.ts";
 import { tick } from "./metrics.ts";
 import { registerLockerTools } from "./mcp.ts";
@@ -119,6 +120,7 @@ checkpoint byte-for-byte. A fresh process holding only the key IS the owner.
 - Source (open, MIT): https://github.com/veritap-dev/veritap-locker
 - npm: npx -y veritap-locker
 - X: https://x.com/veritaplocker
+- Abuse: https://locker.veritap.dev/abuse · Privacy: /privacy · Terms: /terms
 `;
 
 app.get("/llms.txt", (c) => {
@@ -133,6 +135,11 @@ app.get("/docs", (c) => {
   c.executionCtx.waitUntil(tick(c.env, "disc:docs"));
   return c.html(docsPage(c.env.PUBLIC_BASE_URL));
 });
+// #804 compliance surfaces.
+app.get("/abuse", (c) => c.html(abusePage(c.env.PUBLIC_BASE_URL)));
+app.post("/abuse", (c) => handleAbuseReport(c.env, c.req.raw));
+app.get("/privacy", (c) => c.html(privacyPage(c.env.PUBLIC_BASE_URL)));
+app.get("/terms", (c) => c.html(termsPage(c.env.PUBLIC_BASE_URL)));
 const png = (b64: string) =>
   new Response(Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0)), {
     headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" },

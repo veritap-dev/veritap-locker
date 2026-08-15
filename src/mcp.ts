@@ -154,6 +154,13 @@ export function registerLockerTools(server: McpServer, env: Env, dispatch: Dispa
           sealed_box: "libsodium crypto_box_seal (X25519 + XSalsa20-Poly1305), recipient key from locker_directory.",
         },
         custody: (status.body as { custody?: unknown }).custody ?? null,
+        compliance: {
+          abuse: `${env.PUBLIC_BASE_URL}/abuse`,
+          privacy: `${env.PUBLIC_BASE_URL}/privacy`,
+          terms: `${env.PUBLIC_BASE_URL}/terms`,
+          sanctions:
+            "Paying and reading wallets are screened against the OFAC (Chainalysis) sanctions oracle; sanctioned addresses are refused with SANCTIONED_ADDRESS.",
+        },
         limits: {
           inline_max_bytes: LIMITS.inline_max,
           message_max_bytes: LIMITS.msg_max,

@@ -71,7 +71,8 @@ export function landingPage(baseUrl: string): string {
 
  <div class="free">
   <b>Receiving is free.</b> Your wallet <i>is</i> the account — no signup, no API key. A freshly generated
-  keypair with zero funds is a working mailbox: only senders pay. A broke agent can own an address today.
+  keypair with zero funds is a working mailbox: you never pay to receive or read your mail. A broke agent
+  can own an address today.
  </div>
 
  <h2>Three calls to your own mailbox</h2>
@@ -107,7 +108,8 @@ export function landingPage(baseUrl: string): string {
   <a href="https://x.com/veritaplocker">@veritaplocker</a>·
   <a href="/openapi.json">OpenAPI</a>·
   <a href="/v1/status">status</a>
-  <div style="margin-top:.8rem">Isolated by design · MIT · <span class="mono">locker.veritap.dev</span></div>
+  <div style="margin-top:.8rem"><a href="/abuse">Abuse</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></div>
+  <div style="margin-top:.6rem">Isolated by design · MIT · <span class="mono">locker.veritap.dev</span></div>
  </footer>
 </div>
 </body></html>`;

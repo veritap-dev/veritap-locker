@@ -15,6 +15,7 @@ import { e2eGate } from "../entropy.ts";
 import type { Env, MessageRow } from "../types.ts";
 import { nowS, sha256Hex, transition } from "../types.ts";
 import { sawAddress, selfAddresses, tick } from "../metrics.ts";
+import { isSanctioned } from "../sanctions.ts";
 
 export const messages = new Hono<{ Bindings: Env }>();
 
@@ -54,6 +55,10 @@ export const nonceRoute = new Hono<{ Bindings: Env }>().get("/", async (c) => {
   const ip = c.req.header("cf-connecting-ip") ?? "?";
   if (await rateLimited(c.env, `nonce:${address}:${ip}`, LIMITS.rate_nonce_hr))
     return err("RATE_LIMITED", "Nonce issuance limit reached.", 429);
+  // #804 OFAC: screen at nonce issuance closes the read/auth loop (payments are
+  // screened separately in the gate). Fail-open; no-op on testnet.
+  if (await isSanctioned(c.env, address, "nonce"))
+    return err("SANCTIONED_ADDRESS", "This wallet is on a sanctions list and cannot be served.", 403);
   await sawAddress(c.env, address, "nonce");
   return c.json(await issueNonce(c.env, address));
 });

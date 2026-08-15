@@ -48,3 +48,8 @@ RECEIVING_ADDRESS = "0x5c7872C6aA7Da867F52733Cebf469f4b9A113f2B"
 [[r2_buckets]]
 binding = "BACKUP"
 bucket_name = "veritap-locker-backup"
+
+# #804: OFAC sanctions screening cache (Chainalysis oracle results, 24h TTL).
+[[kv_namespaces]]
+binding = "SANCTIONS"
+id = "b1941c1c65e244dca3a88a8d43a390e2"

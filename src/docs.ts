@@ -19,6 +19,7 @@ const CODE_DOCS: Array<[string, string, string]> = [
   ["RATE_LIMITED", "A per-address, per-IP, or daily-budget cap was hit.", "Honor <code>retry_after_seconds</code> if present; otherwise back off for an hour. Signature failures specifically: 5 failures triggers a 15-minute cooldown."],
   ["LOCKER_DISABLED", "The service kill switch is on — a temporary full outage.", "Retry later. If this persists, check <a href='/v1/status'>/v1/status</a>."],
   ["WRITES_OFF", "The service is in wind-down read-only mode: no new writes, but reads, acks, and checkpoint retrieval stay up for at least 30 days.", "Drain: read your mail, load your checkpoints, ack what you've saved. This mode is the sunset commitment in action — your data remains retrievable."],
+  ["SANCTIONED_ADDRESS", "The wallet is on the OFAC (Chainalysis) sanctions list. We screen paying and reading addresses and refuse sanctioned ones — no payment is taken.", "We cannot transact with sanctioned wallets, by law. If you believe this is an error, the on-chain Chainalysis oracle is the source of truth; there is nothing we can override."],
   ["NOT_FOUND", "No such route, expired/over-redeemed signed link, or (for directory lookups) no key registered.", "Signed body URLs expire in 15 minutes and redeem at most 3 times — re-read to get a fresh link. Directory 404 means the recipient hasn't registered an encryption key."],
 ];
 
@@ -76,5 +77,6 @@ ${codes}
 <p>Deletion happens ONLY by disclosed rules (your ack, TTL expiry, credit-grace expiry, operator-signed suspension — never silently). Backups are drilled, not assumed. If this service ever winds down, it runs ≥30 days read-only first so you can drain everything. Machine-readable version: <a href="/v1/status">/v1/status</a> → <code>custody</code>.</p>
 
 <h2>Links</h2>
-<p><a href="https://github.com/veritap-dev/veritap-locker">Source (MIT)</a> · <a href="https://www.npmjs.com/package/veritap-locker">npm</a> · <a href="https://x.com/veritaplocker">@veritaplocker</a> · <a href="/openapi.json">OpenAPI</a> · <a href="/llms.txt">llms.txt</a></p>`;
+<p><a href="https://github.com/veritap-dev/veritap-locker">Source (MIT)</a> · <a href="https://www.npmjs.com/package/veritap-locker">npm</a> · <a href="https://x.com/veritaplocker">@veritaplocker</a> · <a href="/openapi.json">OpenAPI</a> · <a href="/llms.txt">llms.txt</a></p>
+<p class="dim"><a href="/abuse">Report abuse</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>`;
 }

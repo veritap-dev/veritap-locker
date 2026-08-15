@@ -19,7 +19,9 @@
  */
 
 import { CREDIT_BAZAAR, SEND_BAZAAR } from "./bazaar-metadata.ts";
+import { err } from "./codes.ts";
 import { sawAddress, tick } from "./metrics.ts";
+import { isSanctioned } from "./sanctions.ts";
 import type { Env } from "./types.ts";
 import { transition } from "./types.ts";
 
@@ -251,6 +253,20 @@ export async function paymentGate(
       ok: false,
       response: respond402(quote, "Payment payload does not satisfy the requirements (x402 v2 required; check network, recipient, and amount)."),
     };
+
+  // #804 OFAC: screen the payer before any settlement. Sanctioned → 403, no
+  // money moves, logged. Fail-open on oracle error (see sanctions.ts).
+  if (await isSanctioned(env, auth.from, "pay")) {
+    await transition(env, "payment", entityForAudit, null, "blocked_sanctioned", `payer ${auth.from} on OFAC list`);
+    return {
+      ok: false,
+      response: err(
+        "SANCTIONED_ADDRESS",
+        "This wallet is on a sanctions list and cannot transact. No payment was taken.",
+        403,
+      ),
+    };
+  }
 
   // Mainnet uses the CDP facilitator with per-request JWT auth from the CDP
   // secret; testnet uses the hosted keyless facilitator. Both are config.

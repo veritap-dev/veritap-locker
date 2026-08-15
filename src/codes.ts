@@ -14,6 +14,8 @@ export const CODES = [
   "RATE_LIMITED",
   "LOCKER_DISABLED",
   "WRITES_OFF",
+  "SANCTIONED_ADDRESS",
+  "ABUSE_RECEIVED",
   "NOT_FOUND",
 ] as const;
 export type Code = (typeof CODES)[number];
