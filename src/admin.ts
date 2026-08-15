@@ -127,7 +127,13 @@ ${table(["", "send", "credit", "probe (bare/invalid)"], [
   row(["402 quotes served", totals["quote402:send"] ?? 0, totals["quote402:credit"] ?? 0, totals["quote402:probe"] ?? 0]),
   row(["settled payments", totals["settled:send"] ?? 0, totals["settled:credit"] ?? 0, "—"]),
 ])}
-<p class="dim">Conversion counts real quotes only (valid request, no payment); probes are crawlers/validators and excluded.</p>
+<p><b>Send quotes, disambiguated</b> — a valid, unpaid send can still be a crawler walking our published example. Only <span class="self" style="color:#7bd88f">EXTERNAL</span> is real interest:</p>
+${table(["bucket", "14d", "what it is"], [
+  row(["self", totals["qual:send:self"] ?? 0, "target is one of our own wallets (incl. the doc example address)"]),
+  row(["example_echo", totals["qual:send:example_echo"] ?? 0, "body byte-identical to our OpenAPI/Bazaar sample → schema-aware crawler"]),
+  `<tr style="color:#7bd88f"><td><b>EXTERNAL</b></td><td><b>${esc(totals["qual:send:external"] ?? 0)}</b></td><td>real address + non-example body → genuine window-shopper</td></tr>`,
+])}
+<p class="dim">Conversion counts real quotes only (valid request, no payment); probes are crawlers/validators and excluded. The disambiguation split above is instrumented from 2026-08-15 — earlier quotes predate it and are uncategorized.</p>
 
 <h2>3 · Identity — distinct wallets <span class="dim">(external / self)</span></h2>
 ${table(["interaction", "external wallets", "self"], wallets.map((w) => row([w.kind, w.total - w.self_n, w.self_n])))}

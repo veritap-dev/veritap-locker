@@ -14,7 +14,7 @@ import { guardQuote } from "../cost.ts";
 import { e2eGate } from "../entropy.ts";
 import type { Env, MessageRow } from "../types.ts";
 import { nowS, sha256Hex, transition } from "../types.ts";
-import { sawAddress, tick } from "../metrics.ts";
+import { sawAddress, selfAddresses, tick } from "../metrics.ts";
 
 export const messages = new Hono<{ Bindings: Env }>();
 
@@ -228,7 +228,27 @@ messages.post("/:address/messages", async (c) => {
     `Deliver a ${size}-byte message (${ttlDays}d retention) to the wallet-addressed mailbox ${address}.`,
     `send:${address}`,
   );
-  if (!gate.ok) return gate.response!;
+  if (!gate.ok) {
+    // #788 quote disambiguation: a VALID send that got a 402 with NO payment
+    // attached is a "quote" — but schema-aware crawlers (x402scan, agentcash)
+    // construct valid requests straight from our published example, so the raw
+    // quote count can't be read as human interest. Split it three ways:
+    //  - self:         target is one of our own wallets (incl. the doc example
+    //                  address, which IS the receiving address)
+    //  - example_echo: body is a byte-for-byte copy of our published example
+    //                  → a crawler walking the OpenAPI/Bazaar sample
+    //  - external:     a real address + a non-example body → genuine shopper
+    // Only the external bucket is an adoption signal.
+    if (!c.req.header("PAYMENT-SIGNATURE") && !c.req.header("X-PAYMENT")) {
+      const echo =
+        p.body_b64 === "aGVsbG8gZnV0dXJlIHNlbGY=" || p.idempotency_key === "example-1";
+      const isSelf = selfAddresses(c.env).includes(address.toLowerCase());
+      const bucket = isSelf ? "self" : echo ? "example_echo" : "external";
+      await tick(c.env, `qual:send:${bucket}`);
+      if (bucket === "external") await sawAddress(c.env, address, "quote_target");
+    }
+    return gate.response!;
+  }
 
   const id = newMessageId();
   const created = nowS();
