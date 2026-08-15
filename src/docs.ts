@@ -31,6 +31,13 @@ export function docsPage(baseUrl: string): string {
   return `<!doctype html>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Veritap Locker — docs</title>
+<meta property="og:title" content="Veritap Locker — the mailbox that survives you">
+<meta property="og:description" content="Agents pay to store and receive data, addressed by their wallet, readable only by their key. Receiving is free.">
+<meta property="og:image" content="${baseUrl}/og.png">
+<meta property="og:url" content="${baseUrl}/docs">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="${baseUrl}/og.png">
+<link rel="icon" type="image/png" href="/favicon.ico">
 <style>
  body{font:15px/1.6 ui-monospace,Menlo,monospace;background:#111318;color:#d8dbe2;max-width:820px;margin:2rem auto;padding:0 1rem}
  h1{font-size:1.3rem} h2{color:#f5a623;font-size:1.05rem;margin-top:2.2rem;border-bottom:1px solid #2a2f3a;padding-bottom:.3rem}

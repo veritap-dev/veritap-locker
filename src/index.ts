@@ -10,6 +10,7 @@ import { createMcpHandler } from "agents/mcp/server";
 
 import { err, LIMITS } from "./codes.ts";
 import { adminPanel } from "./admin.ts";
+import { FAVICON_32_B64, LOGO_512_B64, OG_B64 } from "./brand-assets.ts";
 import { docsPage } from "./docs.ts";
 import { tick } from "./metrics.ts";
 import { registerLockerTools } from "./mcp.ts";
@@ -129,12 +130,13 @@ app.get("/docs", (c) => {
   c.executionCtx.waitUntil(tick(c.env, "disc:docs"));
   return c.html(docsPage(c.env.PUBLIC_BASE_URL));
 });
-app.get("/favicon.ico", (c) =>
-  new Response(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#1a1d29"/><path d="M9 14v-3a7 7 0 0 1 14 0v3" fill="none" stroke="#f5a623" stroke-width="2.5"/><rect x="7" y="14" width="18" height="12" rx="2" fill="#f5a623"/><circle cx="16" cy="19.5" r="2" fill="#1a1d29"/><rect x="15" y="20" width="2" height="3.5" fill="#1a1d29"/></svg>`,
-    { headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400" } },
-  ),
-);
+const png = (b64: string) =>
+  new Response(Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0)), {
+    headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" },
+  });
+app.get("/favicon.ico", () => png(FAVICON_32_B64));
+app.get("/logo.png", () => png(LOGO_512_B64));
+app.get("/og.png", () => png(OG_B64));
 app.get("/.well-known/llms.txt", (c) => c.text(LLMS_TXT));
 app.get("/.well-known/x402", (c) =>
   c.json({
