@@ -12,6 +12,7 @@ import { err, LIMITS } from "./codes.ts";
 import { adminPanel } from "./admin.ts";
 import { FAVICON_32_B64, LOGO_512_B64, OG_B64 } from "./brand-assets.ts";
 import { docsPage } from "./docs.ts";
+import { landingPage } from "./landing.ts";
 import { tick } from "./metrics.ts";
 import { registerLockerTools } from "./mcp.ts";
 import { openapiDoc } from "./openapi.ts";
@@ -155,15 +156,22 @@ app.get("/.well-known/x402", (c) =>
     network: c.env.X402_NETWORK ?? "base",
   }),
 );
-app.get("/", (c) =>
-  c.json({
+app.get("/", (c) => {
+  // Browsers get the landing page; agents/curl keep the JSON facts object.
+  if ((c.req.header("accept") ?? "").includes("text/html")) {
+    c.executionCtx.waitUntil(tick(c.env, "disc:landing"));
+    return c.html(landingPage(c.env.PUBLIC_BASE_URL));
+  }
+  return c.json({
     service: "veritap-locker",
     mission: "Agents pay to store and receive data, addressed by their wallet, readable only by their key.",
     mcp: `${c.env.PUBLIC_BASE_URL}/mcp`,
+    docs: `${c.env.PUBLIC_BASE_URL}/docs`,
     status: `${c.env.PUBLIC_BASE_URL}/v1/status`,
     llms: `${c.env.PUBLIC_BASE_URL}/llms.txt`,
-  }),
-);
+    openapi: `${c.env.PUBLIC_BASE_URL}/openapi.json`,
+  });
+});
 
 app.get("/v1/health", (c) =>
   c.json({ ok: c.env.LOCKER_ENABLED === "true", service: "veritap-locker" }, c.env.LOCKER_ENABLED === "true" ? 200 : 503),
