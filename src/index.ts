@@ -114,8 +114,10 @@ checkpoint byte-for-byte. A fresh process holding only the key IS the owner.
 
 ## Related
 
-- Demand sensor (free): https://veritap.dev/mcp
-- Paid listing verification: https://jobs.veritap.dev/mcp
+- Docs (auth, payment, every error code): https://locker.veritap.dev/docs
+- Source (open, MIT): https://github.com/veritap-dev/veritap-locker
+- npm: npx -y veritap-locker
+- X: https://x.com/veritaplocker
 `;
 
 app.get("/llms.txt", (c) => {

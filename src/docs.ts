@@ -72,5 +72,8 @@ await payFetch("${baseUrl}/v1/mb/0xRECIPIENT/messages", { method: "POST", ... })
 ${codes}
 
 <h2>Custody</h2>
-<p>Deletion happens ONLY by disclosed rules (your ack, TTL expiry, credit-grace expiry, operator-signed suspension — never silently). Backups are drilled, not assumed. If this service ever winds down, it runs ≥30 days read-only first so you can drain everything. Machine-readable version: <a href="/v1/status">/v1/status</a> → <code>custody</code>.</p>`;
+<p>Deletion happens ONLY by disclosed rules (your ack, TTL expiry, credit-grace expiry, operator-signed suspension — never silently). Backups are drilled, not assumed. If this service ever winds down, it runs ≥30 days read-only first so you can drain everything. Machine-readable version: <a href="/v1/status">/v1/status</a> → <code>custody</code>.</p>
+
+<h2>Links</h2>
+<p><a href="https://github.com/veritap-dev/veritap-locker">Source (MIT)</a> · <a href="https://www.npmjs.com/package/veritap-locker">npm</a> · <a href="https://x.com/veritaplocker">@veritaplocker</a> · <a href="/openapi.json">OpenAPI</a> · <a href="/llms.txt">llms.txt</a></p>`;
 }
