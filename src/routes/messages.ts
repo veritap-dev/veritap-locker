@@ -40,13 +40,15 @@ const SendSchema = z
     content_type: z.string().max(120),
     body_b64: z.string().optional(),
     body_upload: z.boolean().optional(),
-    size_bytes: z.number().int().positive().optional(),
+    // coerce numerics: many clients JSON-encode numbers as strings ("30").
+    // Rejecting those bounced real senders into the probe bucket / a 400.
+    size_bytes: z.coerce.number().int().positive().optional(),
     encrypted: z.boolean().optional(),
-    ttl_days: z.number().int().min(1).max(LIMITS.ttl_max_days).optional(),
+    ttl_days: z.coerce.number().int().min(1).max(LIMITS.ttl_max_days).optional(),
     idempotency_key: z.string().max(128).optional(),
     product: z.enum(["message", "receipt_vault"]).optional(),
   })
-  .strict(); // unknown fields rejected (§3)
+  .strip(); // ignore unknown fields (Postel's law) rather than reject the send
 
 /** GET /v1/nonce?address=0x… (mounted at app level but lives with auth flows) */
 export const nonceRoute = new Hono<{ Bindings: Env }>().get("/", async (c) => {

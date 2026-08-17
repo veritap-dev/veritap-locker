@@ -189,7 +189,9 @@ lockers.post("/:address/credit", async (c) => {
     return err("VALIDATION_ERROR", "Invalid address.", 400);
   }
   const body = (await c.req.json().catch(() => null)) as { amount_microusd?: number } | null;
-  const amount = body?.amount_microusd ?? 0;
+  // Coerce: a client may send amount_microusd as a string. Number("abc")→NaN,
+  // which the integer check below still rejects; "1000000"→1000000 is accepted.
+  const amount = Number(body?.amount_microusd ?? 0);
   // L2: must be a positive integer (microusd == atomic USDC units). A fractional
   // value would otherwise reach BigInt() in the gate and throw a raw 500.
   // Discovery probes POST bare bodies expecting 402 + requirements: answer at

@@ -165,13 +165,22 @@ describe("message lifecycle (§12.7-14)", () => {
     expect(seen.size).toBe(120);
   }, 120_000);
 
-  it("unknown fields rejected (§3)", async () => {
-    const res = await fetch(`${BASE()}/v1/mb/${newClient().address}/messages`, {
+  it("tolerant send: unknown fields are ignored, stringified numbers coerced (Postel's law)", async () => {
+    // Previously .strict() rejected these and dumped real senders into the
+    // probe bucket / a 400. Now we accept a slightly-loose but valid body.
+    const extra = await fetch(`${BASE()}/v1/mb/${newClient().address}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content_type: "x", body_b64: "aGk=", surprise: true }),
+      body: JSON.stringify({ content_type: "text/plain", body_b64: "aGk=", memo: "ignored" }),
     });
-    expect(res.status).toBe(400);
+    expect(extra.status).toBe(201); // free instance: unknown field stripped, message stored
+
+    const coerced = await fetch(`${BASE()}/v1/mb/${newClient().address}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content_type: "text/plain", body_b64: "aGk=", ttl_days: "45" }),
+    });
+    expect(coerced.status).toBe(201); // "45" coerced to 45, not rejected
   });
 });
 
