@@ -43,6 +43,24 @@ export async function sawAddress(env: Env, address: string, kind: string): Promi
   }
 }
 
+/** Sanitize an arbitrary string into a safe low-cardinality metric key suffix. */
+export const metricKey = (s: string) => (s || "").replace(/[^a-z0-9_.-]/gi, "").slice(0, 40) || "unknown";
+
+/**
+ * Classify a caller's User-Agent so "capabilities reads" can be split
+ * agent-vs-crawler (the blind spot the quote disambiguator left open).
+ */
+export function uaClass(ua: string): string {
+  const s = (ua || "").toLowerCase();
+  if (!s) return "none";
+  if (/smithery/.test(s)) return "smithery";
+  if (/x402|agentcash|glama|pulse|mcp.?registry|\bscan\b|audit|crawl|spider|\bbot\b|monitor|probe|validat/.test(s)) return "validator";
+  if (/claude|anthropic|cursor|cline|windsurf|continue|goose|librechat|openai|langchain|llamaindex|mcp-remote|modelcontext/.test(s)) return "agent";
+  if (/python|curl|wget|go-http|okhttp|\bjava\b|ruby|node-fetch|undici|axios|httpx|\bgot\b/.test(s)) return "scripted";
+  if (/mozilla|chrome|safari|firefox|edge/.test(s)) return "browser";
+  return "unknown";
+}
+
 /** Known self wallets, lowercased. Receiving address is always included. */
 export function selfAddresses(env: Env): string[] {
   const configured = (env.SELF_ADDRESSES ?? "")

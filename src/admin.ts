@@ -121,6 +121,17 @@ ${table(["signal", "14d total", "by day"], [
   row(["llms.txt fetches", totals["disc:llms_txt"] ?? 0, daySeries("disc:llms_txt")]),
   row(["openapi.json fetches", totals["disc:openapi"] ?? 0, daySeries("disc:openapi")]),
 ])}
+<p><b>Agents or crawlers?</b> — capabilities reads split by caller User-Agent (instrumented 2026-08-20; earlier reads uncategorized). <span style="color:#7bd88f">agent</span> = a known agent client; validator/smithery/scripted lean crawler.</p>
+${table(["capabilities caller", "14d"], (() => {
+  const cls = ["agent", "smithery", "validator", "scripted", "browser", "unknown", "none"];
+  return cls.filter((k) => (totals[`capsua:${k}`] ?? 0) > 0).map((k) =>
+    `<tr${k === "agent" ? ' style="color:#7bd88f"' : ""}><td>${esc(k)}</td><td>${esc(totals[`capsua:${k}`] ?? 0)}</td></tr>`,
+  );
+})())}
+<p><b>Who connects (initialize clientInfo.name)</b> — how MCP clients self-identify:</p>
+${table(["client name", "14d initializes"],
+  Object.entries(totals).filter(([k]) => k.startsWith("client:")).sort((a, b) => b[1] - a[1]).slice(0, 12)
+    .map(([k, n]) => row([k.slice("client:".length), n])))}
 
 <h2>2 · Window-shopping → conversion</h2>
 ${table(["", "send", "credit", "probe (bare/invalid)"], [

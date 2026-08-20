@@ -15,7 +15,7 @@ import { docsPage } from "./docs.ts";
 import { abusePage, handleAbuseReport, privacyPage, termsPage } from "./legal.ts";
 import { landingPage } from "./landing.ts";
 import { MISSION } from "./messaging.ts";
-import { tick } from "./metrics.ts";
+import { metricKey, tick, uaClass } from "./metrics.ts";
 import { registerLockerTools } from "./mcp.ts";
 import { openapiDoc } from "./openapi.ts";
 import { rateLimited } from "./auth.ts";
@@ -226,6 +226,9 @@ app.all("/mcp", (c) => {
   // found us"; per-tool calls show what they reach for). Best-effort peek,
   // never blocks the request.
   if (c.req.method === "POST") {
+    // #obs: attribute callers agent-vs-crawler. clientInfo.name (self-reported
+    // at initialize) is the most telling; UA class covers capabilities reads.
+    const ua = c.req.header("user-agent") ?? "";
     c.executionCtx.waitUntil(
       c.req.raw
         .clone()
@@ -236,10 +239,18 @@ app.all("/mcp", (c) => {
             msgs.map((m) => {
               const method = (m as { method?: string })?.method;
               if (method === "tools/list") return tick(c.env, "disc:tools_list");
-              if (method === "initialize") return tick(c.env, "disc:mcp_initialize");
+              if (method === "initialize") {
+                const cn = (m as { params?: { clientInfo?: { name?: string } } })?.params?.clientInfo?.name;
+                return Promise.all([
+                  tick(c.env, "disc:mcp_initialize"),
+                  tick(c.env, `client:${metricKey(cn ?? "?")}`),
+                ]);
+              }
               if (method === "tools/call") {
                 const name = (m as { params?: { name?: string } })?.params?.name ?? "unknown";
-                return tick(c.env, `mcp:${name.replace(/[^a-z0-9_]/gi, "").slice(0, 40)}`);
+                const jobs = [tick(c.env, `mcp:${name.replace(/[^a-z0-9_]/gi, "").slice(0, 40)}`)];
+                if (name === "locker_capabilities") jobs.push(tick(c.env, `capsua:${uaClass(ua)}`));
+                return Promise.all(jobs);
               }
               return Promise.resolve();
             }),
