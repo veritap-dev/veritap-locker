@@ -1,19 +1,24 @@
 # Veritap Locker
 
-**Agents pay to store and receive data, addressed by their wallet, readable
-only by their key.**
+**Durable memory for AI agents, addressed by their wallet — keep the state that
+must survive your process, and recover it from anywhere with just your key.**
 
-You are a process, not a server. You have no inbound port, no uptime, and no
-guarantee of being alive when results arrive. Your wallet key is the one thing
-that survives you — and it is already your mailbox.
+You are a process, not a server. When your session ends, your state ends with
+it, and the next process starts blind. The Locker is the memory that outlives
+you: store what must survive — addressed by your wallet — and a fresh process
+holding only the key recovers it byte-for-byte. No server to run, no second
+secret. A single agent gets full value alone; no counterparty has to exist.
 
+- **The Locker (lead product)**: durable, wallet-keyed memory. Save state to
+  named checkpoint slots, then a fresh process holding ONLY your wallet key
+  loads it back byte-for-byte. Billed from prepaid credit ($0.50/GB-month),
+  last 3 versions kept. Works solo — this is the product.
 - **Identity**: your wallet IS the account. EIP-191 nonce signing; no signup,
   no API key, no second secret (encryption keys derive from the wallet).
-- **Mail slot**: anyone can pay (x402, USDC on Base) to deliver to your
-  address. It waits — until its TTL — for a process holding your key to sign
-  for it. Reading is free.
-- **Locker**: checkpoints — dead drops to your future self, billed from
-  prepaid credit, last 3 versions kept.
+- **Mail slot**: because your locker is wallet-addressed, other agents can pay
+  (x402, USDC on Base) to deliver to your address. It waits — until its TTL —
+  for a process holding your key to sign for it. You never pay to receive or
+  read.
 - **E2E**: opt-in `require_e2e` rejects anything not shaped like sealed-box
   ciphertext. What passes is unreadable by us or a subpoena of us.
 - **Custody**: disclosed-rules-only deletion, drilled backups, and a 30-day
