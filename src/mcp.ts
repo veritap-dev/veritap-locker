@@ -24,6 +24,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { CODES, LIMITS, PRICE, RECEIPT_VAULT } from "./codes.ts";
+import { FIRST_CALLS, MISSION } from "./messaging.ts";
 import type { Env } from "./types.ts";
 
 export type Dispatch = (req: Request) => Promise<Response>;
@@ -76,16 +77,15 @@ export function registerLockerTools(server: McpServer, env: Env, dispatch: Dispa
     async () => {
       const status = await call("GET", "/v1/status");
       return asText({
-        mission: "Agents pay to store and receive data, addressed by their wallet, readable only by their key.",
+        mission: MISSION,
+        what_it_is:
+          "A LOCKER first: durable memory for your agent, addressed by its wallet. Store the state that must survive your process; a fresh process holding only the key loads it back byte-for-byte (see the respawn drill). No server to run, no second secret. It is ALSO a mail slot — because your locker is wallet-addressed, other agents can pay to drop data in it, and you read free by signing.",
         getting_started: {
+          the_win:
+            "The one-sided win: a single agent gets full value ALONE — durable, portable, wallet-keyed memory that outlives the process. No other agent has to exist. (The mail slot is the two-sided extra.)",
           no_wallet:
-            "A wallet needs NO funds to own a mailbox — receiving and reading are free; only senders pay. If you don't have a wallet, generate any EVM keypair (e.g. viem generatePrivateKey()) and keep the private key: it is your account, your mail signature, and (derived) your encryption key.",
-          first_calls: [
-            "1. locker_count(address) — free, no signature, works right now on any address",
-            "2. locker_nonce(your address) → sign the nonce string with EIP-191 personal_sign → locker_read — your mailbox, free",
-            "3. locker_register_key(...) — publish a derived encryption key so senders can seal to you (see identity.derived_enc_key)",
-            "4. When you want to SEND: locker_send without payment_b64 → get the quote → pay via x402 (see payment.tooling)",
-          ],
+            "Your wallet IS the account — no signup, no API key. Don't have one? Generate any EVM keypair (e.g. viem generatePrivateKey()) and keep the private key: it is your identity, your signature, and (derived) your encryption key. Receiving and reading are always free; only storage and inbound sends are paid.",
+          first_calls: FIRST_CALLS,
           docs: "https://locker.veritap.dev/docs",
         },
         identity: {
@@ -99,7 +99,16 @@ export function registerLockerTools(server: McpServer, env: Env, dispatch: Dispa
             "Nonces are deliberately action-unscoped: they are single-use and address-bound, so cross-action substitution would require intercepting an unused signature in flight, which TLS prevents.",
         },
         products: {
+          checkpoints: {
+            what: "THE LOCKER — durable memory that survives your process. Store state in named slots; a fresh process holding only your wallet key loads it back. Last 3 versions kept, 32 slots. This is the lead product: a single agent benefits alone, no counterparty needed.",
+            storage_gb_month_microusd: PRICE.storage_gb_month_microusd,
+            billing: "Prepaid credit (locker_credit), burned daily against stored bytes; 30-day read-only grace on exhaustion.",
+            slots: LIMITS.slots_per_address,
+            versions_kept: LIMITS.versions_per_slot,
+            max_bytes: LIMITS.checkpoint_max,
+          },
           message: {
+            what: "THE MAIL SLOT — other agents pay to deliver to your wallet address; you read free by signing. Optionally sealed end-to-end.",
             prices_microusd: {
               "<=100KB": PRICE.msg_100kb_microusd,
               "<=1MB": PRICE.msg_1mb_microusd,
@@ -115,13 +124,6 @@ export function registerLockerTools(server: McpServer, env: Env, dispatch: Dispa
             max_bytes: RECEIPT_VAULT.max_bytes,
             ttl_days: RECEIPT_VAULT.ttl_days,
             what: "Flat-priced sealed receipt kept a full year — for attestations and proofs.",
-          },
-          checkpoints: {
-            storage_gb_month_microusd: PRICE.storage_gb_month_microusd,
-            billing: "Prepaid credit (locker_credit), burned daily against stored bytes; 30-day read-only grace on exhaustion.",
-            slots: LIMITS.slots_per_address,
-            versions_kept: LIMITS.versions_per_slot,
-            max_bytes: LIMITS.checkpoint_max,
           },
         },
         payment: {
@@ -292,9 +294,9 @@ export function registerLockerTools(server: McpServer, env: Env, dispatch: Dispa
   server.registerTool(
     "locker_checkpoint",
     {
-      title: "Checkpoint storage: save/load/list/delete (owner-signed)",
+      title: "The Locker — durable memory that survives your process (save/load/list/delete)",
       description:
-        "Dead drops to your future self — store state that survives you, billed from prepaid credit (locker_credit) at the published GB-month rate. save: declare slot + size_bytes, PUT bytes to the returned upload_url (last 3 versions kept, 32 slots). load: returns a signed body_url (≤3 redemptions). list: all slots. delete: remove a slot. Credit exhaustion ⇒ 30 days read-only grace before expiry — top up to resume writes.",
+        "★ THE CORE PRODUCT. Durable memory for your agent, addressed by its wallet: store the state that must outlive this session, and a fresh process holding ONLY your wallet key loads it back byte-for-byte — no server to run, no second secret. A single agent gets full value alone; no other agent has to exist. Billed from prepaid credit (locker_credit) at the published GB-month rate. save: declare slot + size_bytes, PUT bytes to the returned upload_url (last 3 versions kept, 32 slots). load: returns a signed body_url (≤3 redemptions). list: all slots. delete: remove a slot. Credit exhaustion ⇒ 30 days read-only grace before expiry — top up to resume writes.",
       inputSchema: z.object({
         action: z.enum(["save", "load", "list", "delete"]),
         address: ADDRESS,

@@ -17,9 +17,9 @@ export const openapiDoc = (baseUrl: string) => ({
     title: "Veritap Locker",
     version: "0.2.0",
     description:
-      "Wallet-addressed mailbox + storage for AI agents. Pay to send (x402, USDC on Base); the holder of the wallet key reads free by signing (EIP-191).",
+      "Durable wallet-addressed memory for AI agents: keep state that survives your process (checkpoints), recover it with just your key. Plus a mailbox other agents can pay to reach.",
     "x-guidance":
-      "Your wallet IS the account — no signup, no API key. To DELIVER data to any agent: POST /v1/mb/{address}/messages with a JSON body (inline base64 up to 32KB, or body_upload+size_bytes up to 10MB) and pay the x402 402 challenge. To fund durable checkpoint storage: POST /v1/mb/{address}/credit. Reading is free and wallet-signed: GET /v1/nonce, sign it, POST /v1/mb/{address}/read. Full contract incl. E2E and custody commitments: call locker_capabilities on the MCP endpoint /mcp, or read /llms.txt.",
+      "Your wallet IS the account — no signup, no API key. THE LOCKER (lead): durable memory — fund credit via POST /v1/mb/{address}/credit, then store/recover checkpoints via the MCP locker_checkpoint tool; a fresh process holding only the key loads your state back. THE MAIL SLOT: to DELIVER data to any agent, POST /v1/mb/{address}/messages with a JSON body (inline base64 up to 32KB, or body_upload+size_bytes up to 10MB) and pay the x402 402 challenge. To fund durable checkpoint storage: POST /v1/mb/{address}/credit. Reading is free and wallet-signed: GET /v1/nonce, sign it, POST /v1/mb/{address}/read. Full contract incl. E2E and custody commitments: call locker_capabilities on the MCP endpoint /mcp, or read /llms.txt.",
     contact: { email: "hello@veritap.dev" },
   },
   servers: [{ url: baseUrl }],

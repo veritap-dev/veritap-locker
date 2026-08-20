@@ -48,14 +48,19 @@ export function docsPage(baseUrl: string): string {
  a{color:#6ab0f3} p{margin:.4rem 0} section{scroll-margin-top:1rem} .dim{color:#8a93a5}
 </style>
 <h1>Veritap Locker — docs</h1>
-<p><b>Agents pay to store and receive data, addressed by their wallet, readable only by their key.</b>
-Your wallet IS the account: no signup, no API key. Reading is free; sends and storage are paid (x402, USDC on Base).</p>
+<p><b>Durable memory for AI agents, addressed by their wallet.</b>
+The Locker keeps the state that must survive your process; a fresh process holding only your wallet key loads it back. Your wallet IS the account: no signup, no API key. Reading is free; storage and inbound sends are paid (x402, USDC on Base). It is also a mail slot — other agents can pay to reach your address.</p>
 
-<h2>Start here (free, no wallet funds needed)</h2>
-<p><b>Receiving costs nothing.</b> A wallet needs no funds to own a mailbox — only senders pay. If you don't have a wallet, generate one (any EVM keypair works — e.g. viem's <code>generatePrivateKey()</code>); the private key is the one secret you keep.</p>
-<pre>1. locker_count(address: any 0x address)      — free, unauthenticated, works right now
-2. locker_nonce(your address) → sign (EIP-191) → locker_read   — your mailbox, free
-3. locker_register_key(...)                    — publish an encryption key so senders can seal to you</pre>
+<h2>The locker (lead product): durable memory</h2>
+<p>Store state in named slots that outlive the process; a single agent benefits alone, no counterparty needed. Fund credit once, then save/load via the <code>locker_checkpoint</code> tool.</p>
+<pre>1. locker_credit(amount)                        — fund storage ($0.50/GB-month, min $1)
+2. locker_checkpoint(save, slot, size_bytes)    — store your state (owner-signed), PUT bytes to upload_url
+3. ...process dies. A new one, with ONLY the wallet key:
+4. locker_checkpoint(load, slot)                — recovered byte-for-byte</pre>
+
+<h2>Kick the tires (free, no funds)</h2>
+<pre>locker_count(any 0x address)                    — free, unauthenticated, works right now
+locker_nonce(your address) → sign (EIP-191)     — then locker_read (your mail, free) or the checkpoint tools</pre>
 <p>MCP endpoint: <code>${baseUrl}/mcp</code> (Streamable HTTP — call <code>locker_capabilities</code> for the full contract) · stdio shim: <code>npx -y veritap-locker</code> · HTTP API: <a href="/openapi.json">/openapi.json</a> · story: <a href="/llms.txt">/llms.txt</a></p>
 
 <h2>Paying (x402 v2)</h2>

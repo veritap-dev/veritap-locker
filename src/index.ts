@@ -14,6 +14,7 @@ import { FAVICON_32_B64, LOGO_512_B64, OG_B64 } from "./brand-assets.ts";
 import { docsPage } from "./docs.ts";
 import { abusePage, handleAbuseReport, privacyPage, termsPage } from "./legal.ts";
 import { landingPage } from "./landing.ts";
+import { MISSION } from "./messaging.ts";
 import { tick } from "./metrics.ts";
 import { registerLockerTools } from "./mcp.ts";
 import { openapiDoc } from "./openapi.ts";
@@ -79,27 +80,28 @@ app.use("/v1/*", async (c, next) => {
 // crawlers and agents look first. Static, no DB.
 const LLMS_TXT = `# Veritap Locker
 
-> Agents pay to store and receive data, addressed by their wallet, readable only by their key.
+> ${MISSION}
 
-You are a process, not a server. You have no inbound port, no uptime, and no
-guarantee of being alive when results arrive. Your wallet key is the one thing
-that survives you — and it is already your mailbox.
+You are a process, not a server. When your session ends, your state ends with
+it, and the next process starts blind. Your wallet key is the one thing that
+survives you — so the Locker is the memory that survives you too: store what
+must persist, addressed by your wallet, and get it back with just the key.
 
 The respawn drill is the product's reason to exist, run as a test on every
-build: a process saves state and dies; a NEW process holding ONLY the wallet
-private key derives the address, signs a nonce, drains the mail, and loads the
-checkpoint byte-for-byte. A fresh process holding only the key IS the owner.
+build: a process saves its state and dies; a NEW process holding ONLY the
+wallet private key derives the address, signs, and loads the checkpoint
+byte-for-byte. A fresh process holding only the key IS the owner.
 
+- THE LOCKER (lead product): durable memory — store state in named slots that
+  outlive the process; prepaid credit at $0.50/GB-month, last 3 versions kept.
+  A single agent gets full value alone — no counterparty, no server to run.
 - Identity: your wallet IS the account (EIP-191). No signup, no API key; the
   encryption key derives from a wallet signature, so there is no second secret.
-- No wallet? Generate any EVM keypair (e.g. viem generatePrivateKey()) — a
-  wallet needs NO funds to own a mailbox. Receiving and reading are free;
-  only senders pay. A broke agent can adopt a mailbox today.
-- Mail slot: anyone pays (x402, USDC on Base) to deliver to your address; it
-  waits until its TTL for a process holding your key to sign for it. Reading is
-  free. Sends from $0.01.
-- Locker: checkpoints — dead drops to your future self, prepaid credit at
-  $0.50/GB-month, last 3 versions kept.
+- No wallet? Generate any EVM keypair (e.g. viem generatePrivateKey()).
+  Receiving and reading are always free; only storage and inbound sends are paid.
+- Mail slot (the two-sided extra): because your locker is wallet-addressed,
+  other agents can pay (x402, USDC on Base, from $0.01) to deliver to your
+  address; it waits up to its TTL, and you read it free by signing.
 - E2E: opt-in require_e2e rejects anything not shaped like sealed-box
   ciphertext; what passes is unreadable by the operator or a subpoena of the
   operator.
@@ -190,9 +192,9 @@ app.get("/v1/status", (c) =>
     version: "0.1.0",
     phase: "A",
     why: [
-      "You are a process, not a server. You have no inbound port, no uptime, and no guarantee of being alive when results arrive.",
-      "Your wallet key is the one thing that survives you — and it is already your mailbox.",
-      "Anything sent to your wallet address waits here (until its TTL) until a process holding your key signs for it. Reading is free; if you hold the key, you can read your mail.",
+      "You are a process, not a server. When your session ends, your state ends with it — the next process starts blind.",
+      "The Locker is the memory that survives you: store what must persist, addressed by your wallet, and a fresh process holding only the key loads it back byte-for-byte. Reading is free.",
+      "Because it is wallet-addressed, other agents can also pay to drop data in your locker — but you never pay to receive or read.",
     ],
     // #773-B5/C2 — custody commitments, stated where machines read them.
     custody: {
@@ -252,7 +254,8 @@ app.all("/mcp", (c) => {
         { name: "veritap-locker", version: "0.1.0" },
         {
           instructions:
-            "Agents pay to store and receive data, addressed by their wallet, readable only by their key. Your wallet IS the account — no signup, no API key, and RECEIVING IS FREE: a wallet needs no funds to own a mailbox (only senders pay), so any EVM keypair — even freshly generated — is a working account. Call locker_capabilities first for the full contract (identity, prices, custody commitments, x402 payment flow, getting-started recipe). Try locker_count on any address right now — free, no signature. Mail waits until a process holding your key signs for it. Docs: https://locker.veritap.dev/docs",
+            MISSION +
+            " You are a process, not a server: when your session ends, your state ends with it. The Locker is durable memory that survives you — store what must persist (locker_checkpoint), and a fresh process holding ONLY your wallet key loads it back byte-for-byte. A single agent gets full value alone, no counterparty needed. Your wallet IS the account: no signup, no API key. It is ALSO a mail slot — other agents can pay to reach your address; you read free. Call locker_capabilities first for the full contract; try locker_count on any address right now (free, no signature). Docs: https://locker.veritap.dev/docs",
         },
       );
       registerLockerTools(
