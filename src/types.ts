@@ -28,6 +28,11 @@ export interface Env {
   FACILITATOR_URL?: string;
   CDP_API_KEY_ID?: string;
   CDP_API_KEY_SECRET?: string;
+  /** Fiat top-up rail (dual-rail, one meter). Secrets: .dev.vars locally,
+   * `wrangler secret` in prod. Absent => the /topup + webhook routes 404, so
+   * the card rail is simply off until configured. */
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
 }
 
 export interface MessageRow {

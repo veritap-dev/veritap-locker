@@ -25,6 +25,7 @@ import { breakerCheck, isFreeGetRoute, isSheddableRoute, isWriteRoute, secondsTo
 import { messages, nonceRoute } from "./routes/messages.ts";
 import { lockers } from "./routes/lockers.ts";
 import { keys, directory } from "./routes/keys.ts";
+import { topup } from "./routes/topup.ts";
 import type { Env } from "./types.ts";
 import { nowS, transition } from "./types.ts";
 
@@ -291,6 +292,9 @@ app.route("/v1/mb", messages);
 app.route("/v1/mb", lockers);
 app.route("/v1/mb", keys);
 app.route("/v1/directory", directory);
+// Fiat top-up rail (defines /topup, /topup/done, /v1/stripe/webhook). 404s when
+// Stripe env is unset, so the card rail is off until configured.
+app.route("/", topup);
 
 // Signed blob serve/upload (our own HMAC-signed URLs; R2 has no presign).
 app.get("/v1/blob/*", (c) => {
