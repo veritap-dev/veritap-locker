@@ -27,16 +27,48 @@ import {
 
 export const topup = new Hono<{ Bindings: Env }>();
 
+/** Branded shell for the human-facing funding pages. A person lands here
+ * because THEIR AGENT sent them, often meeting Veritap for the first time with
+ * a card in hand — the page's job is confidence: who we are, what they're
+ * buying, what protects them. Matches the Locker design system (landing.ts). */
 const page = (title: string, body: string) => `<!doctype html>
+<html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title}</title><link rel="icon" type="image/png" href="/favicon.ico">
+<title>${title} · Veritap Locker</title><link rel="icon" type="image/png" href="/favicon.ico">
 <style>
- body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#111318;color:#e6e9f0;max-width:560px;margin:3rem auto;padding:0 1.2rem}
- h1{font-size:1.5rem} .amber{color:#f5a623} label{display:block;margin:1.2rem 0 .3rem;color:#8a93a5}
- input,select{width:100%;box-sizing:border-box;background:#171a21;border:1px solid #262b36;border-radius:8px;color:#e6e9f0;padding:.7rem;font:inherit}
- button{margin-top:1.6rem;background:#f5a623;color:#111318;border:0;border-radius:8px;padding:.75rem 1.2rem;font-weight:700;font-size:1rem;cursor:pointer;width:100%}
- .dim{color:#8a93a5;font-size:.9rem} .mono{font-family:ui-monospace,Menlo,monospace} a{color:#6ab0f3}
-</style>${body}`;
+ :root{--bg:#111318;--panel:#171a21;--line:#262b36;--fg:#e6e9f0;--dim:#8a93a5;--amber:#f5a623;--green:#7bd88f;--blue:#6ab0f3}
+ *{box-sizing:border-box}
+ body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+ .wrap{max-width:560px;margin:0 auto;padding:2.2rem 1.2rem 3rem}
+ .brand{display:flex;align-items:center;gap:.8rem;margin-bottom:1.8rem}
+ .brand img{width:44px;height:44px;border-radius:10px}
+ .brand .name{font-weight:700;font-size:1.15rem;letter-spacing:-.01em}
+ .brand .tag{color:var(--dim);font-size:.85rem;margin-top:-2px}
+ h1{font-size:1.45rem;margin:.2rem 0 .6rem;letter-spacing:-.01em} .amber{color:var(--amber)}
+ .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1.3rem 1.4rem;margin:1.1rem 0}
+ label{display:block;margin:1.1rem 0 .3rem;color:var(--dim);font-size:.92rem}
+ input,select{width:100%;background:#0e1015;border:1px solid var(--line);border-radius:8px;color:var(--fg);padding:.7rem .8rem;font:inherit}
+ input:focus,select:focus{outline:none;border-color:var(--amber)}
+ button{margin-top:1.5rem;background:var(--amber);color:#111318;border:0;border-radius:8px;padding:.8rem 1.2rem;font-weight:700;font-size:1rem;cursor:pointer;width:100%}
+ button:hover{filter:brightness(1.08)}
+ .dim{color:var(--dim);font-size:.92rem} .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace} a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+ .trust{display:grid;gap:.45rem;margin-top:1.2rem;font-size:.9rem;color:var(--dim)}
+ .trust b{color:var(--fg);font-weight:600}
+ .trust .row{display:flex;gap:.55rem;align-items:baseline}
+ .trust .row::before{content:"✓";color:var(--green);font-weight:700}
+ footer{margin-top:2.2rem;padding-top:1.1rem;border-top:1px solid var(--line);color:var(--dim);font-size:.85rem;display:flex;flex-wrap:wrap;gap:.4rem .9rem}
+</style></head><body><div class="wrap">
+<div class="brand"><img src="/logo.png" alt="Veritap Locker"><div><div class="name">Veritap <span class="amber">Locker</span></div><div class="tag">Durable memory for AI agents — the locker that survives you.</div></div></div>
+${body}
+<footer>
+ <span>Payments processed by <b style="color:var(--fg)">Stripe</b> — card details never touch our servers.</span>
+ <a href="https://locker.veritap.dev/">About the Locker</a>
+ <a href="/docs">Docs</a>
+ <a href="/v1/status">Live status</a>
+ <a href="/terms">Terms</a>
+ <a href="/privacy">Privacy</a>
+</footer>
+</div></body></html>`;
 
 // ---- GET /topup — funding page / redirect to Checkout ----
 topup.get("/topup", async (c) => {
@@ -78,26 +110,37 @@ topup.get("/topup", async (c) => {
     return c.redirect(session.url, 303);
   }
 
-  // No params: render a minimal funding form.
+  // No params: render the funding form. The visitor is usually a human whose
+  // AGENT sent them this link — open with that story, then the trust facts.
   const prefill = rawAddr ? ` value="${rawAddr.replace(/"/g, "")}"` : "";
-  const canceled = c.req.query("canceled") ? `<p class="dim">Checkout canceled — nothing was charged.</p>` : "";
+  const canceled = c.req.query("canceled")
+    ? `<div class="card" style="border-left:3px solid var(--dim)"><b>Checkout canceled</b> — nothing was charged. You can retry below whenever you're ready.</div>`
+    : "";
   return c.html(
     page(
-      "Top up your Locker",
-      `<h1>Top up your <span class="amber">Locker</span></h1>
-<p class="dim">Add prepaid storage credit to a wallet address by card — no account. Credit is non-transferable and spendable only on Locker storage and delivery.</p>
+      "Fund your agent's Locker",
+      `<h1>Fund your agent's <span class="amber">Locker</span></h1>
+<p class="dim">Sent here by your AI agent? It uses the Veritap Locker to keep memory that survives between sessions and machines, and its storage credit needs a top-up. One card payment, no account to create — the credit attaches directly to your agent's wallet address below.</p>
 ${canceled}
+<div class="card">
 <form method="get" action="/topup">
-  <label for="address">Wallet address</label>
+  <label for="address">Your agent's wallet address</label>
   <input class="mono" id="address" name="address" placeholder="0x…"${prefill} required>
   <label for="usd">Amount (USD)</label>
   <select id="usd" name="usd">
-    <option value="5">$5</option><option value="10">$10</option>
+    <option value="5">$5 — months of typical agent memory</option><option value="10">$10</option>
     <option value="25">$25</option><option value="50">$50</option><option value="100">$100</option>
   </select>
   <button type="submit">Continue to secure checkout →</button>
 </form>
-<p class="dim" style="margin-top:1.4rem">Prefer machine-native payment? Agents can fund autonomously with x402 (USDC on Base) — see <a href="/docs">the docs</a>.</p>`,
+</div>
+<div class="trust">
+ <div class="row"><span><b>Card handled by Stripe.</b> We never see or store your card details.</span></div>
+ <div class="row"><span><b>Prepaid service credit, not a subscription.</b> No recurring charges — it only ever spends down on storage ($0.50/GB-month) and delivery.</span></div>
+ <div class="row"><span><b>Non-transferable, single-purpose.</b> Credit attaches to the wallet address above and can't be moved or cashed out.</span></div>
+ <div class="row"><span><b>The data stays your agent's.</b> Only the holder of the wallet key can read what's stored. <a href="/docs">Custody commitments</a> are public and machine-verifiable.</span></div>
+</div>
+<p class="dim" style="margin-top:1.3rem">Agents can also fund themselves autonomously with x402 (USDC on Base) — see <a href="/docs">the docs</a>.</p>`,
     ),
   );
 });
@@ -106,10 +149,13 @@ ${canceled}
 topup.get("/topup/done", (c) =>
   c.html(
     page(
-      "Credit added",
-      `<h1>Credit on the way <span class="amber">✓</span></h1>
-<p>Your payment succeeded. The credit posts to your address as soon as Stripe confirms it (usually seconds).</p>
-<p class="dim">Check your balance any time: <span class="mono">GET /v1/mb/{address}/status</span>. You can close this tab.</p>`,
+      "Payment received",
+      `<h1>Payment received <span class="amber">✓</span></h1>
+<div class="card">
+<p style="margin:.2rem 0"><b>Your agent's Locker credit is on the way.</b> It posts automatically as soon as Stripe confirms the payment — usually within seconds. If the locker was read-only, writing unlocks the moment the credit lands.</p>
+</div>
+<p class="dim">Nothing else to do — you can close this tab and let your agent know it's funded. A receipt arrives from Stripe if you provided an email.</p>
+<p class="dim">Curious what your agent is using this for? The Locker is durable, wallet-addressed memory for AI agents: <a href="https://locker.veritap.dev/">locker.veritap.dev</a>.</p>`,
     ),
   ),
 );

@@ -46,6 +46,9 @@ export async function createTopupSession(opts: {
     "line_items[0][price_data][currency]": "usd",
     "line_items[0][price_data][unit_amount]": String(cents),
     "line_items[0][price_data][product_data][name]": `Veritap Locker credit — ${address.slice(0, 6)}…${address.slice(-4)}`,
+    "line_items[0][price_data][product_data][description]":
+      "Prepaid storage credit for your agent's durable memory. No subscription — spends down only on storage and delivery.",
+    "line_items[0][price_data][product_data][images][0]": `${opts.baseUrl}/logo.png`,
     "metadata[address]": address,
     "payment_intent_data[metadata][address]": address,
     success_url: `${opts.baseUrl}/topup/done?s={CHECKOUT_SESSION_ID}`,
