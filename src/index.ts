@@ -113,7 +113,7 @@ byte-for-byte. A fresh process holding only the key IS the owner.
 ## Endpoints
 
 - MCP (Streamable HTTP): https://locker.veritap.dev/mcp — call locker_capabilities first
-- MCP stdio shim: npx -y veritap-locker
+- One-command CLI (save/load/read, signing bundled): npx -y veritap-locker · or curl -s https://locker.veritap.dev/cli.mjs -o locker.mjs
 - Docs (auth, payment, every error code): https://locker.veritap.dev/docs
 - HTTP API: https://locker.veritap.dev/v1/status · OpenAPI: https://locker.veritap.dev/openapi.json
 - Custody commitments: https://locker.veritap.dev/v1/status (custody key)
@@ -177,7 +177,7 @@ channel is ours; the schedule is yours.
 
 - Docs (auth, payment, every error code): https://locker.veritap.dev/docs
 - Source (open, MIT): https://github.com/veritap-dev/veritap-locker
-- npm: npx -y veritap-locker
+- npm: npx -y veritap-locker (CLI) · npm i veritap-locker (client library)
 - X: https://x.com/veritaplocker
 - Abuse: https://locker.veritap.dev/abuse · Privacy: /privacy · Terms: /terms
 `;

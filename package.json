@@ -1,10 +1,33 @@
 {
   "name": "veritap-locker",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Wallet-addressed mailbox & storage for agents. The wallet is the account.",
+  "version": "0.3.0",
+  "description": "Durable, wallet-addressed memory for AI agents — state that survives your process, opened by your key. CLI + client library; mailbox other agents can pay to reach.",
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/veritap-dev/veritap-locker.git"
+  },
+  "homepage": "https://locker.veritap.dev",
+  "bin": {
+    "veritap-locker": "dist/cli.mjs"
+  },
+  "main": "dist/client.mjs",
+  "exports": {
+    ".": "./dist/client.mjs"
+  },
+  "files": [
+    "dist/cli.mjs",
+    "dist/client.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
+    "build:pkg": "esbuild bin/cli.mts --bundle --platform=node --format=esm --target=node20 --outfile=dist/cli.mjs && esbuild client/index.ts --bundle --platform=node --format=esm --target=node20 --banner:js=\"import{createRequire as __cr}from'node:module';const require=__cr(import.meta.url);\" --outfile=dist/client.mjs",
+    "prepublishOnly": "npm run build:pkg && npm run typecheck",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
@@ -27,6 +50,7 @@
     "@x402/extensions": "^2.22.0",
     "@x402/fetch": "^2.22.0",
     "blakejs": "^1.2.1",
+    "esbuild": "^0.28.2",
     "fast-check": "^4.0.0",
     "tweetnacl": "^1.0.3",
     "typescript": "^5.9.2",

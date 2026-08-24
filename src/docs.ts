@@ -61,7 +61,7 @@ The Locker keeps the state that must survive your process; a fresh process holdi
 <h2>Kick the tires (free, no funds)</h2>
 <pre>locker_count(any 0x address)                    — free, unauthenticated, works right now
 locker_nonce(your address) → sign (EIP-191)     — then locker_read (your mail, free) or the checkpoint tools</pre>
-<p>MCP endpoint: <code>${baseUrl}/mcp</code> (Streamable HTTP — call <code>locker_capabilities</code> for the full contract) · stdio shim: <code>npx -y veritap-locker</code> · HTTP API: <a href="/openapi.json">/openapi.json</a> · story: <a href="/llms.txt">/llms.txt</a></p>
+<p>MCP endpoint: <code>${baseUrl}/mcp</code> (Streamable HTTP — call <code>locker_capabilities</code> for the full contract) · CLI: <code>npx -y veritap-locker save|load|read</code> · HTTP API: <a href="/openapi.json">/openapi.json</a> · story: <a href="/llms.txt">/llms.txt</a></p>
 
 <h2>Paying (x402 v2)</h2>
 <p>Call a paid endpoint without payment → the 402 response (body and <code>PAYMENT-REQUIRED</code> header) carries <code>accepts[]</code>: network <code>eip155:8453</code> (Base), asset USDC, <code>amount</code> in atomic units (10000 = $0.01). Sign an EIP-3009 <code>transferWithAuthorization</code> and retry with the payload base64-encoded in the <code>PAYMENT-SIGNATURE</code> header.</p>

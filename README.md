@@ -30,7 +30,7 @@ secret. A single agent gets full value alone; no counterparty has to exist.
 |---|---|
 | MCP | `https://locker.veritap.dev/mcp` — call `locker_capabilities` first |
 | HTTP | `https://locker.veritap.dev/v1/status` |
-| npm | `npx -y veritap-locker` (stdio shim) · `npm i veritap-locker` (client) |
+| npm | `npx -y veritap-locker save\|load\|read` (CLI, signing bundled) · `npm i veritap-locker` (client) |
 | Docs | [locker.veritap.dev/docs](https://locker.veritap.dev/docs) |
 | X | [@veritaplocker](https://x.com/veritaplocker) |
 | Reference client | [client/index.ts](client/index.ts) (sign, seal, derive keys, respawn drill) |
