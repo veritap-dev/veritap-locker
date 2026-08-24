@@ -125,7 +125,12 @@ topup.post("/v1/stripe/webhook", async (c) => {
   if (result.kind === "bad") return c.text("bad signature", 400); // Stripe retries
   if (result.kind === "ignore") return c.text("ok", 200);
 
-  const { address, amountMicrousd, sessionId, eventId } = result;
+  // Canonicalize (EIP-55) — Stripe metadata carries the address lowercased, but
+  // every ledger row is keyed checksummed. Skipping this once split the credit
+  // onto a phantom lowercase row while the real wallet stayed in grace.
+  const address = canonicalAddress(result.address);
+  if (!address) return c.text("ok", 200); // validly-signed junk; ack, never credit
+  const { amountMicrousd, sessionId, eventId } = result;
 
   // Sanctions screen (same as the x402 path). Fail-closed: don't credit.
   if (await isSanctioned(c.env, address, "topup-webhook")) {
