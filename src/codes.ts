@@ -17,6 +17,7 @@ export const CODES = [
   "SANCTIONED_ADDRESS",
   "ABUSE_RECEIVED",
   "NOT_FOUND",
+  "CONFLICT", // optimistic-concurrency: slot moved since your expected_version
 ] as const;
 export type Code = (typeof CODES)[number];
 

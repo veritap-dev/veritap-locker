@@ -176,11 +176,17 @@ export class LockerClient {
     return { ...res, keyPair: kp };
   }
 
-  async checkpointSave(slot: string, bytes: Uint8Array, contentType = "application/octet-stream") {
+  /**
+   * Save a checkpoint. Pass `expectedVersion` for optimistic concurrency: the
+   * write lands only if the slot is still at that version (else status 409
+   * CONFLICT with { current_version }), so two agents editing shared state can't
+   * silently clobber each other. Omit it for last-write-wins append.
+   */
+  async checkpointSave(slot: string, bytes: Uint8Array, contentType = "application/octet-stream", expectedVersion?: number) {
     const auth = await this.challenge();
-    const res = await this.json<{ version: number; upload_url: string }>(`/v1/mb/${this.address}/locker/${slot}`, {
+    const res = await this.json<{ version: number; upload_url: string; current_version?: number }>(`/v1/mb/${this.address}/locker/${slot}`, {
       method: "PUT",
-      body: JSON.stringify({ ...auth, size_bytes: bytes.byteLength, content_type: contentType }),
+      body: JSON.stringify({ ...auth, size_bytes: bytes.byteLength, content_type: contentType, ...(expectedVersion !== undefined ? { expected_version: expectedVersion } : {}) }),
     });
     if (res.status !== 200) return res;
     const up = await fetch(res.body.upload_url, {
@@ -193,15 +199,22 @@ export class LockerClient {
   }
 
   async checkpointLoad(slot: string, version: number | "latest" = "latest"): Promise<Uint8Array | null> {
+    const m = await this.checkpointLoadMeta(slot, version);
+    return m ? m.bytes : null;
+  }
+
+  /** Like checkpointLoad but also returns the version loaded — pass that version
+   * back as `expectedVersion` to checkpointSave for a safe read-modify-write. */
+  async checkpointLoadMeta(slot: string, version: number | "latest" = "latest"): Promise<{ bytes: Uint8Array; version: number } | null> {
     const auth = await this.challenge();
-    const res = await this.json<{ body_url?: string }>(`/v1/mb/${this.address}/locker/${slot}/get`, {
+    const res = await this.json<{ body_url?: string; version?: number }>(`/v1/mb/${this.address}/locker/${slot}/get`, {
       method: "POST",
       body: JSON.stringify({ ...auth, version }),
     });
     if (res.status !== 200 || !res.body.body_url) return null;
     const blob = await fetch(res.body.body_url);
     if (!blob.ok) return null;
-    return new Uint8Array(await blob.arrayBuffer());
+    return { bytes: new Uint8Array(await blob.arrayBuffer()), version: res.body.version ?? 0 };
   }
 
   /**

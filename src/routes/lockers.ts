@@ -41,7 +41,7 @@ lockers.put("/:address/locker/:slot", async (c) => {
   if (!SLOT_RE.test(slot)) return err("VALIDATION_ERROR", "Slot must match [a-z0-9_-]{1,64}.", 400);
 
   const body = (await c.req.json().catch(() => null)) as
-    | { nonce?: string; signature?: string; size_bytes?: number; content_type?: string }
+    | { nonce?: string; signature?: string; size_bytes?: number; content_type?: string; expected_version?: number }
     | null;
   const a = await authed(c, address, body);
   if (a.res) return a.res;
@@ -69,24 +69,45 @@ lockers.put("/:address/locker/:slot", async (c) => {
     return err("SLOT_LIMIT", `Max ${LIMITS.slots_per_address} slots per address. A ticket was filed.`, 409);
   }
 
-  // Strictly-ordered version via conditional insert loop (§12.16).
-  let version = 0;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const max = await c.env.DB.prepare(
-      `SELECT COALESCE(max(version),0) AS v FROM checkpoints WHERE address=? AND slot=?`,
+  const insert = (v: number) =>
+    c.env.DB.prepare(
+      `INSERT INTO checkpoints (address, slot, version, r2_key, size, content_type, created_at) VALUES (?,?,?,?,?,?,?)`,
     )
+      .bind(address, slot, v, `ckpt/${address}/${slot}/${v}`, size, body?.content_type ?? "application/octet-stream", nowS())
+      .run();
+  const curMax = async () =>
+    (await c.env.DB.prepare(`SELECT COALESCE(max(version),0) AS v FROM checkpoints WHERE address=? AND slot=?`)
       .bind(address, slot)
-      .first<{ v: number }>();
-    version = (max?.v ?? 0) + 1;
+      .first<{ v: number }>())?.v ?? 0;
+
+  let version = 0;
+  const expected = body?.expected_version;
+  if (expected !== undefined) {
+    // Optimistic concurrency (§ overwrite fix): write ONLY if the slot is still
+    // at the version this writer based its edit on. Prevents two agents editing
+    // shared state from silently clobbering each other — the loser gets CONFLICT
+    // and must re-load + retry, instead of a lost update.
+    if (!Number.isInteger(expected) || expected < 0)
+      return err("VALIDATION_ERROR", "expected_version must be a non-negative integer.", 400);
+    const cur = await curMax();
+    if (cur !== expected)
+      return err("CONFLICT", `Slot is at version ${cur}, not your expected ${expected}. Re-load and retry.`, 409, { current_version: cur });
+    version = expected + 1;
     try {
-      await c.env.DB.prepare(
-        `INSERT INTO checkpoints (address, slot, version, r2_key, size, content_type, created_at) VALUES (?,?,?,?,?,?,?)`,
-      )
-        .bind(address, slot, version, `ckpt/${address}/${slot}/${version}`, size, body?.content_type ?? "application/octet-stream", nowS())
-        .run();
-      break;
+      await insert(version); // PK collision => a concurrent writer took v; CAS lost
     } catch {
-      if (attempt === 4) return err("VALIDATION_ERROR", "Concurrent save contention; retry.", 409);
+      return err("CONFLICT", `A concurrent write advanced the slot past ${expected}. Re-load and retry.`, 409, { current_version: await curMax() });
+    }
+  } else {
+    // No expectation supplied: strictly-ordered append (last-write-wins HEAD).
+    for (let attempt = 0; attempt < 5; attempt++) {
+      version = (await curMax()) + 1;
+      try {
+        await insert(version);
+        break;
+      } catch {
+        if (attempt === 4) return err("CONFLICT", "Concurrent save contention; retry.", 409);
+      }
     }
   }
 
