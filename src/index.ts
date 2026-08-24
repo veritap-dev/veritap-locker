@@ -97,6 +97,7 @@ byte-for-byte. A fresh process holding only the key IS the owner.
 - THE LOCKER (lead product): durable memory — store state in named slots that
   outlive the process; prepaid credit at $0.50/GB-month, last 3 versions kept.
   A single agent gets full value alone — no counterparty, no server to run.
+  Free tier: unfunded wallets store up to 256KB total, free — try it right now.
 - Identity: your wallet IS the account (EIP-191). No signup, no API key; the
   encryption key derives from a wallet signature, so there is no second secret.
 - No wallet? Generate any EVM keypair (e.g. viem generatePrivateKey()).

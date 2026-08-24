@@ -49,10 +49,29 @@ lockers.put("/:address/locker/:slot", async (c) => {
   if (!size || size > LIMITS.checkpoint_max)
     return err("PAYLOAD_TOO_LARGE", `Checkpoints cap at ${LIMITS.checkpoint_max} bytes.`, 413);
 
-  // Grace = read-only for writes (§4).
+  // Grace = read-only for writes (§4). Error text is a conversion surface —
+  // agents relay it verbatim to the human who can actually pay (sprint-2
+  // finding), so it names every funding rail that is actually live.
+  const fundingWays = (addr: string) =>
+    `Fund it: ${c.env.STRIPE_SECRET_KEY ? `by card at ${c.env.PUBLIC_BASE_URL}/topup?address=${addr} (min $5), or ` : ""}x402 (USDC on Base, min $1) via POST ${c.env.PUBLIC_BASE_URL}/v1/mb/${addr}/credit.`;
   const credit = await creditState(c.env, address);
   if (credit.grace)
-    return err("GRACE_READONLY", "Storage credit exhausted; mailbox is read-only until topped up.", 402);
+    return err("GRACE_READONLY", `Storage credit exhausted; this locker is read-only until topped up. Your data is safe and readable. ${fundingWays(address)}`, 402);
+
+  // Free tier: unfunded wallets may hold up to free_tier_bytes total — enough
+  // to try the product with real checkpoints, too little to freeload storage.
+  if (credit.balance <= 0) {
+    const stored = await c.env.DB.prepare(`SELECT COALESCE(sum(size),0) AS b FROM checkpoints WHERE address=?`)
+      .bind(address)
+      .first<{ b: number }>();
+    if ((stored?.b ?? 0) + size > LIMITS.free_tier_bytes)
+      return err(
+        "INSUFFICIENT_CREDIT",
+        `Free tier is ${Math.floor(LIMITS.free_tier_bytes / 1024)}KB total storage; this save would exceed it. Everything you stored stays readable. ${fundingWays(address)}`,
+        402,
+        { free_tier_bytes: LIMITS.free_tier_bytes, stored_bytes: stored?.b ?? 0 },
+      );
+  }
 
   // 32-slot cap → 409 + auto-ticket (§12.18).
   const slots = await c.env.DB.prepare(

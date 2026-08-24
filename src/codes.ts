@@ -53,6 +53,10 @@ export const LIMITS = {
   slots_per_address: 32,
   versions_per_slot: 3,
   checkpoint_max: 50 * 1024 * 1024,
+  /** Unfunded wallets may store this much total, free, forever — enough to try
+   * real checkpoints (KBs of agent state), too little to freeload data cost.
+   * Byte-capped rather than time-capped: deterministic, sybil-resistant. */
+  free_tier_bytes: 256 * 1024,
   read_page_max: 100,
   grace_days: 30,
   nonce_ttl_seconds: 300,
