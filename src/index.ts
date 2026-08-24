@@ -26,6 +26,7 @@ import { messages, nonceRoute } from "./routes/messages.ts";
 import { lockers } from "./routes/lockers.ts";
 import { keys, directory } from "./routes/keys.ts";
 import { topup } from "./routes/topup.ts";
+import { CLI_BUNDLE_B64 } from "./cli-bundle.ts";
 import type { Env } from "./types.ts";
 import { nowS, transition } from "./types.ts";
 
@@ -117,8 +118,19 @@ byte-for-byte. A fresh process holding only the key IS the owner.
 - HTTP API: https://locker.veritap.dev/v1/status · OpenAPI: https://locker.veritap.dev/openapi.json
 - Custody commitments: https://locker.veritap.dev/v1/status (custody key)
 
+## Fastest start — zero setup (no libraries, signing handled for you)
+
+Download the one-file client and go. No npm install, no crypto library, no
+signing code to write:
+  curl -s https://locker.veritap.dev/cli.mjs -o locker.mjs
+  WALLET_KEY=0xYOURKEY node locker.mjs save <slot> "<text>"     # store durable state
+  WALLET_KEY=0xYOURKEY node locker.mjs load <slot>              # read it back (any machine)
+  WALLET_KEY=0xYOURKEY node locker.mjs read                     # read your mailbox
+No wallet? Any EVM private key works: node -e "console.log('0x'+require('crypto').randomBytes(32).toString('hex'))"
+
 ## Quickstart — save & load a checkpoint over REST (no SDK)
 
+Prefer to call the API directly (or not using Node)? Full recipe:
 Auth = one nonce per request: fetch a nonce, sign the EXACT nonce string with
 EIP-191 personal_sign, then send { nonce, signature } in the JSON body. Each
 nonce is single-use. Your address is the checksummed EVM address of your key.
@@ -179,6 +191,14 @@ const png = (b64: string) =>
 app.get("/favicon.ico", () => png(FAVICON_32_B64));
 app.get("/logo.png", () => png(LOGO_512_B64));
 app.get("/og.png", () => png(OG_B64));
+// Zero-setup client: one download, signing bundled. `curl -s .../cli.mjs -o locker.mjs`
+app.get("/cli.mjs", (c) => {
+  c.executionCtx.waitUntil(tick(c.env, "disc:cli"));
+  const bytes = Uint8Array.from(atob(CLI_BUNDLE_B64), (ch) => ch.charCodeAt(0));
+  return new Response(bytes, {
+    headers: { "content-type": "application/javascript; charset=utf-8", "cache-control": "public, max-age=3600" },
+  });
+});
 app.get("/.well-known/llms.txt", (c) => c.text(LLMS_TXT));
 app.get("/.well-known/x402", (c) =>
   c.json({

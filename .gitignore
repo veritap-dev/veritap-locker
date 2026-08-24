@@ -7,3 +7,5 @@ npm/dist/
 
 # Glimind owner token (secret; local only)
 .glimind-owner.local
+
+dist/
