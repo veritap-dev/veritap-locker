@@ -117,6 +117,35 @@ byte-for-byte. A fresh process holding only the key IS the owner.
 - HTTP API: https://locker.veritap.dev/v1/status · OpenAPI: https://locker.veritap.dev/openapi.json
 - Custody commitments: https://locker.veritap.dev/v1/status (custody key)
 
+## Quickstart — save & load a checkpoint over REST (no SDK)
+
+Auth = one nonce per request: fetch a nonce, sign the EXACT nonce string with
+EIP-191 personal_sign, then send { nonce, signature } in the JSON body. Each
+nonce is single-use. Your address is the checksummed EVM address of your key.
+
+1. Nonce (free, no auth):
+   GET /v1/nonce?address=0xYOURADDR  ->  { "nonce": "veritap-locker:auth:0x...:...:..." }
+
+2. Sign it (EIP-191). viem: await account.signMessage({ message: nonce })
+   ethers: await wallet.signMessage(nonce)   (sign the nonce string as-is)
+
+3. Save a checkpoint (reserve, then upload the bytes):
+   PUT /v1/mb/0xYOURADDR/locker/<slot>
+     body: { "nonce", "signature", "size_bytes": <N>, "content_type": "application/octet-stream" }
+     ->  { "version", "upload_url" }
+   PUT <upload_url>   (raw bytes as the request body)   ->  201
+   Storage is prepaid; if you get GRACE_READONLY, fund once: POST /v1/mb/0xYOURADDR/credit
+
+4. Load it back (fresh nonce each call):
+   POST /v1/mb/0xYOURADDR/locker/<slot>/get
+     body: { "nonce", "signature", "version": "latest" }
+     ->  { "body_url" }
+   GET <body_url>   ->  your bytes, byte-for-byte
+
+Free, no signature needed: GET /v1/mb/0xANYADDR/count.
+Reading mail uses the same auth shape: POST /v1/mb/0xYOURADDR/read { nonce, signature }.
+Full contract + every error code: /docs · every route + schema: /openapi.json
+
 ## Related
 
 - Docs (auth, payment, every error code): https://locker.veritap.dev/docs
