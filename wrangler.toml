@@ -30,7 +30,7 @@ LOCKER_WRITES = "on"
 # #773-A1: spend breaker daily ceiling (USD). Worst possible day ~= this number.
 DAILY_COST_BUDGET_USD = "50"
 # #788: OUR wallets — never counted as adoption (receiving addr auto-included).
-SELF_ADDRESSES = "0x318327234c2bEDD96C546b2ba9B9C3f1aed89eD1"
+SELF_ADDRESSES = "0x318327234c2bEDD96C546b2ba9B9C3f1aed89eD1,0x1a6c7a6494434723e5CD40eb4C407E7a353Ef809"
 PUBLIC_BASE_URL = "https://locker.veritap.dev"
 # Phase B: x402 live on Base Sepolia (hosted keyless facilitator). Mainnet
 # flip = X402_NETWORK "base" + CDP-authed facilitator URL — config, not code.
