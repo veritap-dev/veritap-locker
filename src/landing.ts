@@ -40,6 +40,9 @@ export function landingPage(baseUrl: string): string {
  .npx .dim{color:var(--dim)}
  .free{background:linear-gradient(180deg,#1a1e27,#151821);border:1px solid var(--line);border-left:3px solid var(--green);border-radius:10px;padding:1.1rem 1.3rem;margin:2.5rem 0;font-size:1.08rem}
  .free b{color:var(--green)}
+ .snippet{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1.2rem 1.3rem;margin:2rem 0}
+ .snippet-label{font-weight:600;margin-bottom:.8rem;color:var(--fg)}
+ .snippet-code{background:#0e1015;border:1px solid var(--line);border-radius:8px;padding:1rem;overflow-x:auto;font-size:.86rem;line-height:1.5;margin:0}
  h2{font-size:1.35rem;margin:3rem 0 1rem}
  .steps{counter-reset:s;display:grid;gap:.6rem}
  .step{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:1rem 1.2rem 1rem 3.2rem;position:relative}
@@ -59,15 +62,23 @@ export function landingPage(baseUrl: string): string {
  <header>
   <img src="/logo.png" alt="Veritap Locker">
   <h1>Veritap Locker</h1>
-  <p class="tag">The locker that survives you.</p>
-  <p class="sub">Durable memory for AI agents, addressed by their wallet. Keep the state that must survive your process — recover it from anywhere with just your key.</p>
+  <p class="tag">Agent memory that survives you.</p>
+  <p class="sub">Durable, wallet-addressed memory for AI agents — free to start (256KB, any keypair, no signup). Keep state that survives your process, machine, and vendor; recover it from anywhere with just your key.</p>
   <div class="cta">
    <a class="btn primary" href="/docs">Read the docs</a>
    <a class="btn ghost" href="https://github.com/veritap-dev/veritap-locker">View source</a>
    <a class="btn ghost" href="/mcp">MCP endpoint</a>
   </div>
-  <div class="npx mono"><span class="dim">$</span> npx -y veritap-locker</div>
  </header>
+
+ <div class="snippet">
+  <div class="snippet-label">One paste = durable memory for any MCP agent. Free tier, no signup, any EVM keypair.</div>
+  <pre class="mono snippet-code"><span class="cmt"># add to your agent's MCP config:</span>
+{<span class="str">"mcpServers"</span>:{<span class="str">"agent-memory"</span>:{
+  <span class="str">"command"</span>:<span class="str">"npx"</span>,<span class="str">"args"</span>:[<span class="str">"-y"</span>,<span class="str">"veritap-locker"</span>,<span class="str">"mcp"</span>],
+  <span class="str">"env"</span>:{<span class="str">"WALLET_KEY"</span>:<span class="str">"0x&lt;any EVM private key&gt;"</span>}}}}</pre>
+  <p class="dim" style="margin:.7rem 0 0">Tools become bare <code>memory_save(slot, text)</code> / <code>memory_load(slot)</code> — your key stays in your env; signing happens locally. Same key on every agent = one shared memory + mailbox for your whole fleet, across vendors.</p>
+ </div>
 
  <div class="free">
   <b>You are a process, not a server.</b> When your session ends, your state ends with it — the next process starts blind. The Locker is the memory that survives you: store what must persist, and a fresh process holding <i>only</i> your wallet key loads it back. No server to run, no second secret. A single agent gets full value alone — no other agent has to exist.
