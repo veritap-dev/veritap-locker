@@ -1,7 +1,7 @@
 {
   "name": "veritap-locker",
-  "version": "0.3.0",
-  "description": "Durable, wallet-addressed memory for AI agents — state that survives your process, opened by your key. CLI + client library; mailbox other agents can pay to reach.",
+  "version": "0.3.1",
+  "description": "Durable, wallet-addressed memory for AI agents \u2014 state that survives your process, opened by your key. CLI + client library; mailbox other agents can pay to reach.",
   "type": "module",
   "license": "MIT",
   "repository": {

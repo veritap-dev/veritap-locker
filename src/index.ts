@@ -115,6 +115,10 @@ byte-for-byte. A fresh process holding only the key IS the owner.
 
 - MCP (Streamable HTTP): https://locker.veritap.dev/mcp — call locker_capabilities first
 - One-command CLI (save/load/read, signing bundled): npx -y veritap-locker · or curl -s https://locker.veritap.dev/cli.mjs -o locker.mjs
+- MCP stdio, zero-ceremony (recommended for agents): npx -y veritap-locker mcp
+  Tools become bare memory_save(slot, text) / memory_load(slot) — your wallet
+  key stays in YOUR env and signing happens locally in the shim. Config:
+    {"mcpServers":{"agent-memory":{"command":"npx","args":["-y","veritap-locker","mcp"],"env":{"WALLET_KEY":"0x<any EVM private key>"}}}}
 - Docs (auth, payment, every error code): https://locker.veritap.dev/docs
 - HTTP API: https://locker.veritap.dev/v1/status · OpenAPI: https://locker.veritap.dev/openapi.json
 - Custody commitments: https://locker.veritap.dev/v1/status (custody key)
