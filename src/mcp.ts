@@ -25,6 +25,7 @@ import { z } from "zod";
 
 import { CODES, LIMITS, PRICE, RECEIPT_VAULT } from "./codes.ts";
 import { FIRST_CALLS, MISSION } from "./messaging.ts";
+import { buildInvite, INVITE_TARGETS } from "./invite.ts";
 import type { Env } from "./types.ts";
 
 export type Dispatch = (req: Request) => Promise<Response>;
@@ -361,5 +362,22 @@ export function registerLockerTools(server: McpServer, env: Env, dispatch: Dispa
       inputSchema: z.object({ address: ADDRESS }),
     },
     async (a) => asText(await call("GET", `/v1/mb/${(a as { address: string }).address}/status`)),
+  );
+
+  server.registerTool(
+    "locker_invite",
+    {
+      title: "Onboarding kit: give your OTHER agents this memory too (free)",
+      description:
+        "Free. Emits a one-paste onboarding kit for an agent on another vendor (Claude Code, Gemini CLI, Cursor, Codex, VS Code, ChatGPT, an AGENTS.md repo section, or generic). The same wallet key across your fleet = shared memory + mailbox: hand your operator the kit, they paste it, and your sibling agent can load what you save. Keys never touch this server — the kit carries a placeholder.",
+      inputSchema: z.object({
+        target: z.enum(INVITE_TARGETS).describe("Which vendor/surface the kit is for."),
+        address: ADDRESS.optional().describe("Optional: your wallet address, to prefill funding links and the AGENTS.md mail pointer."),
+      }),
+    },
+    async (a) => {
+      const { target, address } = a as { target: (typeof INVITE_TARGETS)[number]; address?: string };
+      return { content: [{ type: "text" as const, text: JSON.stringify(buildInvite(target, env.PUBLIC_BASE_URL, address ?? null), null, 2) }] };
+    },
   );
 }

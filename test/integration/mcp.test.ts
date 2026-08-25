@@ -52,7 +52,7 @@ beforeAll(async () => {
 });
 
 describe("MCP tool contract (Phase C)", () => {
-  it("exposes exactly the 11 frozen tools", async () => {
+  it("exposes exactly the 12 frozen tools", async () => {
     const r = (await rpc("tools/list")) as { result?: { tools?: Array<{ name: string }> } };
     const names = (r.result?.tools ?? []).map((t) => t.name).sort();
     expect(names).toEqual([
@@ -62,6 +62,7 @@ describe("MCP tool contract (Phase C)", () => {
       "locker_count",
       "locker_credit",
       "locker_directory",
+      "locker_invite", // Front 4: cross-vendor onboarding kits (free)
       "locker_nonce",
       "locker_read",
       "locker_register_key",

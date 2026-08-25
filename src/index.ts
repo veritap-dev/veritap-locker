@@ -27,6 +27,7 @@ import { lockers } from "./routes/lockers.ts";
 import { keys, directory } from "./routes/keys.ts";
 import { topup } from "./routes/topup.ts";
 import { CLI_BUNDLE_B64 } from "./cli-bundle.ts";
+import { buildInvite, INVITE_TARGETS } from "./invite.ts";
 import type { Env } from "./types.ts";
 import { nowS, transition } from "./types.ts";
 
@@ -362,6 +363,15 @@ app.all("/mcp/memory", mcpRoute("/mcp/memory"));
 app.get("/admin", (c) => adminPanel(c.env, c.req.query("k") ?? null));
 app.get("/admin/status", (c) => adminPanel(c.env, c.req.query("k") ?? null));
 
+// Front 4: onboarding kits — free, unauthenticated (kits carry a key placeholder).
+app.get("/v1/invite", (c) => {
+  const target = c.req.query("target") ?? "generic";
+  if (!INVITE_TARGETS.includes(target as (typeof INVITE_TARGETS)[number]))
+    return err("VALIDATION_ERROR", `target must be one of: ${INVITE_TARGETS.join(", ")}`, 400);
+  c.executionCtx.waitUntil(tick(c.env, `invite:${target}`));
+  const address = c.req.query("address") ?? null;
+  return c.json(buildInvite(target as (typeof INVITE_TARGETS)[number], c.env.PUBLIC_BASE_URL, address));
+});
 app.route("/v1/nonce", nonceRoute);
 app.route("/v1/mb", messages);
 app.route("/v1/mb", lockers);
