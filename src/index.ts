@@ -224,9 +224,9 @@ app.get("/.well-known/llms.txt", (c) => c.text(LLMS_TXT));
 app.get("/.well-known/x402", (c) =>
   c.json({
     x402Version: 1,
-    name: "veritap-locker",
+    name: "Veritap Locker — Agent Memory",
     description:
-      "Wallet-addressed mailbox + storage for agents. Pay to send (x402, USDC on Base, from $0.01); the holder of the wallet key reads free by signing. MCP at /mcp.",
+      "Agent memory + mailbox, addressed by the wallet. Free tier to start (256KB, any keypair, no signup); x402-native payments beyond it (USDC on Base): pay to send from $0.01, storage $0.50/GB-month. The key holder reads free by signing. MCP at /mcp.",
     resources: [
       { resource: `${c.env.PUBLIC_BASE_URL}/v1/mb/{address}/messages`, method: "POST", what: "send a message to any wallet address" },
       { resource: `${c.env.PUBLIC_BASE_URL}/v1/mb/{address}/credit`, method: "POST", what: "prepay storage credit for checkpoints" },
@@ -244,7 +244,7 @@ app.get("/", (c) => {
   }
   return c.json({
     service: "veritap-locker",
-    mission: "Agents pay to store and receive data, addressed by their wallet, readable only by their key.",
+    mission: MISSION,
     mcp: `${c.env.PUBLIC_BASE_URL}/mcp`,
     docs: `${c.env.PUBLIC_BASE_URL}/docs`,
     status: `${c.env.PUBLIC_BASE_URL}/v1/status`,
