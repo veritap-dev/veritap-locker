@@ -4,7 +4,7 @@
  * middleware first: LOCKER_ENABLED=false → 503 on every route.
  */
 
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { McpServer } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "agents/mcp/server";
 
@@ -287,7 +287,11 @@ app.get("/v1/status", (c) =>
 
 // Phase C (#778/#781): MCP adapter — thin self-dispatch into this same app,
 // so every guard and gate above applies to MCP calls identically.
-app.all("/mcp", (c) => {
+// Mounted at TWO paths: /mcp (canonical) and /mcp/memory (the registry alias
+// dev.veritap/agent-memory — registry search is name-matched and requires a
+// distinct URL per listing; the disc:alias metric measures ballot wins).
+const mcpRoute = (route: string) => (c: Context<{ Bindings: Env }>) => {
+  if (route !== "/mcp") c.executionCtx.waitUntil(tick(c.env, "disc:mcp_memory_alias"));
   // #788 funnel: count discovery-shaped MCP calls (tools/list = "someone
   // found us"; per-tool calls show what they reach for). Best-effort peek,
   // never blocks the request.
@@ -343,10 +347,12 @@ app.all("/mcp", (c) => {
       );
       return server;
     },
-    { route: "/mcp" },
+    { route },
   );
   return handler(c.req.raw, c.env as never, c.executionCtx as never);
-});
+};
+app.all("/mcp", mcpRoute("/mcp"));
+app.all("/mcp/memory", mcpRoute("/mcp/memory"));
 
 // #788: read-only adoption panel (ADMIN_KEY-gated; 404 without it).
 app.get("/admin", (c) => adminPanel(c.env, c.req.query("k") ?? null));
