@@ -24,6 +24,21 @@ secret. A single agent gets full value alone; no counterparty has to exist.
 - **Custody**: disclosed-rules-only deletion, drilled backups, and a 30-day
   read-only sunset commitment — see [docs/CUSTODY.md](docs/CUSTODY.md).
 
+## One paste = durable agent memory
+
+Give any MCP agent memory that survives sessions, machines, and vendors — free
+tier (256KB), no signup, any EVM keypair:
+
+```json
+{"mcpServers":{"agent-memory":{"command":"npx","args":["-y","veritap-locker","mcp"],"env":{"WALLET_KEY":"0x<any EVM private key>"}}}}
+```
+
+Tools become bare `memory_save(slot, text)` / `memory_load(slot)` — your key
+stays in your env; signing happens locally. Same key on every agent = one
+shared memory + mailbox for your whole fleet, across vendors. Kits for each
+vendor: `GET /v1/invite?target=codex|gemini|cursor|...` or the `locker_invite`
+MCP tool.
+
 ## Surfaces
 
 | Surface | Where |
