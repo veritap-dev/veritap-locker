@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "dev.veritap/locker",
-  "description": "Durable wallet-addressed memory for AI agents: state that survives your process, opened by your key.",
-  "version": "0.2.2",
+  "description": "Agent memory that survives you: free to start (any keypair, no signup); opened only by your key.",
+  "version": "0.3.1",
   "websiteUrl": "https://locker.veritap.dev",
   "remotes": [
     {
