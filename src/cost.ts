@@ -12,9 +12,26 @@
  * Facilitator: Coinbase CDP x402, currently fee-free for USDC on Base.
  */
 
-import { PRICE } from "./codes.ts";
+import { LIMITS, PRICE } from "./codes.ts";
 import type { Env } from "./types.ts";
 import { nowS, transition } from "./types.ts";
+
+/**
+ * Daily storage rent (microusd) for an address holding `bytes` of checkpoints.
+ * The first LIMITS.free_tier_bytes are free forever: they accrue no rent and
+ * never trip grace — matching the write-path free tier in routes/lockers.ts.
+ * Only the overage above the free allowance is billed.
+ *
+ * Why this exists: the creditBurn cron previously billed from byte 1, so a
+ * wallet on the free tier (balance 0) failed `balance >= burn` on the very next
+ * daily run and was pushed into read-only grace — making "free 256KB, durable"
+ * effectively a 24-hour tier. Route and cron now share this one definition.
+ */
+export function dailyStorageBurnMicrousd(bytes: number): number {
+  const billable = Math.max(0, bytes - LIMITS.free_tier_bytes);
+  if (billable <= 0) return 0;
+  return Math.ceil((billable / 1e9) * (PRICE.storage_gb_month_microusd / 30));
+}
 
 export const COST_RATES = {
   as_of: "2026-08-14",

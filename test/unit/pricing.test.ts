@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 
 import { LIMITS, PRICE, priceForMessage, RECEIPT_VAULT } from "../../src/codes.ts";
-import { COST_RATES, costFloorMicrousd, MIN_MARGIN } from "../../src/cost.ts";
+import { COST_RATES, costFloorMicrousd, dailyStorageBurnMicrousd, MIN_MARGIN } from "../../src/cost.ts";
 
 const marginHolds = (price: number, size: number, ttl: number, product: "message" | "receipt_vault") =>
   price * (1 - COST_RATES.facilitator_fee_pct) >= MIN_MARGIN * costFloorMicrousd(size, ttl, product);
@@ -55,6 +55,25 @@ describe("pricing margin invariant (#768)", () => {
   it("storage price clears MIN_MARGIN × R2 cost (#768.3)", () => {
     const costPerGbMonth = (COST_RATES.r2_storage_gb_month_usd + 2 * (COST_RATES.r2_class_a_per_million_usd / 1e6)) * 1e6;
     expect(PRICE.storage_gb_month_microusd).toBeGreaterThanOrEqual(MIN_MARGIN * costPerGbMonth);
+  });
+
+  it("free-tier storage never accrues rent (the cron-vs-write-path contradiction)", () => {
+    // Regression: creditBurn used to bill from byte 1, so a free-tier wallet
+    // (balance 0) failed `balance >= burn` and went read-only within a day.
+    // Everything at or under the free allowance must burn exactly 0.
+    expect(dailyStorageBurnMicrousd(0)).toBe(0);
+    expect(dailyStorageBurnMicrousd(1024)).toBe(0); // the 1KB checkpoint that grace'd
+    expect(dailyStorageBurnMicrousd(LIMITS.free_tier_bytes - 1)).toBe(0);
+    expect(dailyStorageBurnMicrousd(LIMITS.free_tier_bytes)).toBe(0);
+  });
+
+  it("only storage above the free tier is billed, and stays above cost", () => {
+    // One byte over the allowance rounds up to a positive burn (no free ride
+    // past the ceiling), and a full extra GB matches the daily rate on the
+    // overage only — not on the whole footprint.
+    expect(dailyStorageBurnMicrousd(LIMITS.free_tier_bytes + 1)).toBeGreaterThan(0);
+    const gbOver = dailyStorageBurnMicrousd(LIMITS.free_tier_bytes + 1e9);
+    expect(gbOver).toBe(Math.ceil(PRICE.storage_gb_month_microusd / 30));
   });
 
   it("a hypothetical facilitator fee up to 20% still clears (spec §6 buffer)", () => {

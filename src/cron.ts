@@ -4,8 +4,8 @@
  * GC, R2 orphan GC (cursor-rotated, M5).
  */
 
-import { err as _err, LIMITS, PRICE } from "./codes.ts";
-import { assertStorageMargin } from "./cost.ts";
+import { err as _err, LIMITS } from "./codes.ts";
+import { assertStorageMargin, dailyStorageBurnMicrousd } from "./cost.ts";
 import type { Env } from "./types.ts";
 import { nowS, transition } from "./types.ts";
 
@@ -81,7 +81,18 @@ export async function creditBurn(env: Env): Promise<void> {
   ).all<{ address: string; bytes: number }>();
   for (const r of results ?? []) {
     if (!r.bytes) continue;
-    const burn = Math.ceil((r.bytes / 1e9) * (PRICE.storage_gb_month_microusd / 30));
+    const burn = dailyStorageBurnMicrousd(r.bytes);
+    // Within the free tier (burn 0): never rent, never read-only. Also clear
+    // any stale grace if this wallet shrank back under the free allowance,
+    // so a formerly-over-quota locker becomes writable again on its own.
+    if (burn === 0) {
+      await env.DB.prepare(
+        `UPDATE credits SET grace_started_at = NULL, updated_at = ? WHERE address = ? AND grace_started_at IS NOT NULL`,
+      )
+        .bind(t, r.address)
+        .run();
+      continue;
+    }
     const cur = await env.DB.prepare(`SELECT balance_microusd, grace_started_at FROM credits WHERE address=?`)
       .bind(r.address)
       .first<{ balance_microusd: number; grace_started_at: number | null }>();

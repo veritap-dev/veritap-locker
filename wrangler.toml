@@ -30,7 +30,9 @@ LOCKER_WRITES = "on"
 # #773-A1: spend breaker daily ceiling (USD). Worst possible day ~= this number.
 DAILY_COST_BUDGET_USD = "50"
 # #788: OUR wallets — never counted as adoption (receiving addr auto-included).
-SELF_ADDRESSES = "0x318327234c2bEDD96C546b2ba9B9C3f1aed89eD1,0x1a6c7a6494434723e5CD40eb4C407E7a353Ef809,0xd2ceb14A68E3bEb10da824C323cD5f87d4dd4ad6"
+# 0x28f1… = a sprint-2 house test wallet (predates this list); it saved the only
+# checkpoint and is the wallet whose free-tier grace surfaced the cron bug.
+SELF_ADDRESSES = "0x318327234c2bEDD96C546b2ba9B9C3f1aed89eD1,0x1a6c7a6494434723e5CD40eb4C407E7a353Ef809,0xd2ceb14A68E3bEb10da824C323cD5f87d4dd4ad6,0x77904Fa147856aE388E5CDEaCbaeB5742F81AA55,0x28f1FE0aC58c27aE11A7CA4e609316c0229aFD45"
 PUBLIC_BASE_URL = "https://locker.veritap.dev"
 # Phase B: x402 live on Base Sepolia (hosted keyless facilitator). Mainnet
 # flip = X402_NETWORK "base" + CDP-authed facilitator URL — config, not code.
