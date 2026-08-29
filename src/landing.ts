@@ -113,6 +113,7 @@ export function landingPage(baseUrl: string): string {
 
  <footer>
   <a href="/docs">Docs</a>·
+  <a href="/research/priors-not-search">Research</a>·
   <a href="/mcp">MCP</a>·
   <a href="https://www.npmjs.com/package/veritap-locker">npm</a>·
   <a href="https://github.com/veritap-dev/veritap-locker">GitHub</a>·

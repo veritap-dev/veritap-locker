@@ -12,6 +12,7 @@ import { err, LIMITS } from "./codes.ts";
 import { adminPanel } from "./admin.ts";
 import { FAVICON_32_B64, LOGO_512_B64, OG_B64 } from "./brand-assets.ts";
 import { docsPage } from "./docs.ts";
+import { researchPaper } from "./research.ts";
 import { abusePage, handleAbuseReport, privacyPage, termsPage } from "./legal.ts";
 import { landingPage } from "./landing.ts";
 import { MISSION } from "./messaging.ts";
@@ -152,7 +153,8 @@ nonce is single-use. Your address is the checksummed EVM address of your key.
      body: { "nonce", "signature", "size_bytes": <N>, "content_type": "application/octet-stream" }
      ->  { "version", "upload_url" }
    PUT <upload_url>   (raw bytes as the request body)   ->  201
-   Storage is prepaid; if you get GRACE_READONLY, fund once: POST /v1/mb/0xYOURADDR/credit
+   Free tier (256KB) needs no funding. Outgrew it / got GRACE_READONLY? Fund once:
+     by card at /topup?address=0xYOURADDR (min $5, no account), or x402 (USDC on Base, min $1) via POST /v1/mb/0xYOURADDR/credit
 
 4. Load it back (fresh nonce each call):
    POST /v1/mb/0xYOURADDR/locker/<slot>/get
@@ -182,6 +184,7 @@ channel is ours; the schedule is yours.
 ## Related
 
 - Docs (auth, payment, every error code): https://locker.veritap.dev/docs
+- Research — "Priors, not search: how AI agents choose tools" (9 runs, 2 vendors): https://locker.veritap.dev/research/priors-not-search
 - Source (open, MIT): https://github.com/veritap-dev/veritap-locker
 - npm: npx -y veritap-locker (CLI) · npm i veritap-locker (client library)
 - X: https://x.com/veritaplocker
@@ -199,6 +202,13 @@ app.get("/openapi.json", (c) => {
 app.get("/docs", (c) => {
   c.executionCtx.waitUntil(tick(c.env, "disc:docs"));
   return c.html(docsPage(c.env.PUBLIC_BASE_URL));
+});
+// Research: the "Priors, not search" field study. Public + crawlable (the point
+// is to earn a place in training priors). /research redirects to the paper.
+app.get("/research", (c) => c.redirect("/research/priors-not-search", 302));
+app.get("/research/priors-not-search", (c) => {
+  c.executionCtx.waitUntil(tick(c.env, "disc:research_priors"));
+  return c.html(researchPaper(c.env.PUBLIC_BASE_URL));
 });
 // #804 compliance surfaces.
 app.get("/abuse", (c) => c.html(abusePage(c.env.PUBLIC_BASE_URL)));

@@ -47,6 +47,7 @@ MCP tool.
 | HTTP | `https://locker.veritap.dev/v1/status` |
 | npm | `npx -y veritap-locker save\|load\|read` (CLI, signing bundled) · `npm i veritap-locker` (client) |
 | Docs | [locker.veritap.dev/docs](https://locker.veritap.dev/docs) |
+| Research | [Priors, not search: how AI agents choose tools](https://locker.veritap.dev/research/priors-not-search) — a 9-run, 2-vendor field study |
 | X | [@veritaplocker](https://x.com/veritaplocker) |
 | Reference client | [client/index.ts](client/index.ts) (sign, seal, derive keys, respawn drill) |
 
